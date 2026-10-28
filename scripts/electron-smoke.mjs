@@ -1,6 +1,6 @@
 // Runs the real Electron app with a disposable user profile and native sandbox.
 // Uses Chromium's local debugging protocol; no extra automation dependencies.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -10,6 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const profile = await mkdtemp(path.join(tmpdir(), 'cornwatch-electron-'));
+const userData = path.join(profile, 'cornwatch');
 const listener = net.createServer();
 await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
 const port = listener.address().port;
@@ -18,7 +19,8 @@ const env = { ...process.env, XDG_CONFIG_HOME: profile };
 for (const key of Object.keys(env)) if (key.startsWith('LLM_') || key.startsWith('CORNWATCH_') || key === 'ELECTRON_RUN_AS_NODE') delete env[key];
 const binary = process.platform === 'darwin' ? 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron' : process.platform === 'win32' ? 'node_modules/electron/dist/electron.exe' : 'node_modules/electron/dist/electron';
 const packagedBinary = process.argv[2];
-let child = spawn(packagedBinary ? path.resolve(packagedBinary) : path.join(root, binary), [...(packagedBinary ? [] : ['.']), `--remote-debugging-port=${port}`], { cwd: root, env, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+const launchArgs = [...(packagedBinary ? [] : ['.']), `--remote-debugging-port=${port}`, `--user-data-dir=${userData}`];
+let child = spawn(packagedBinary ? path.resolve(packagedBinary) : path.join(root, binary), launchArgs, { cwd: root, env, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
 let logs = '';
 child.stdout.on('data', chunk => { logs += chunk; });
 child.stderr.on('data', chunk => { logs += chunk; });
@@ -179,7 +181,7 @@ try {
   // No direct React refresh: a backend mutation must arrive through SSE.
   await evaluate(`window.cornwatch.request('/api/events',{method:'POST',body:{title:'SSE桌面即时更新测试',body:'临时测试记录，退出后删除。',source:'isolated SSE test',published_at:'2026-09-01T08:00:00+08:00',category:'news',region:'测试',severity:'high'}})`);
   await until(`document.querySelector('.event-list')?.textContent.includes('SSE桌面即时更新测试')`, 8000);
-  const draftFiles = await readFile(path.join(profile,'cornwatch','journal-drafts.json'),'utf8');
+  const draftFiles = await readFile(path.join(userData,'journal-drafts.json'),'utf8');
   if (!draftFiles.includes('跨启动保留的未保存复盘')) throw new Error('Draft file missing after navigation');
   // Restart the actual desktop process with the same disposable profile. The
   // backend will choose a new port; drafts must survive this origin change.
@@ -189,7 +191,7 @@ try {
   if(child.exitCode===null) throw new Error('Desktop did not exit cleanly');
   socket.close();
   await delay(250);
-  child = spawn(packagedBinary ? path.resolve(packagedBinary) : path.join(root,binary), [...(packagedBinary ? [] : ['.']),`--remote-debugging-port=${port}`],{cwd:root,env,detached:process.platform !== 'win32',stdio:['ignore','pipe','pipe']});
+  child = spawn(packagedBinary ? path.resolve(packagedBinary) : path.join(root,binary), launchArgs,{cwd:root,env,detached:process.platform !== 'win32',stdio:['ignore','pipe','pipe']});
   child.stdout.on('data', chunk => { logs += chunk; });
   child.stderr.on('data', chunk => { logs += chunk; });
   await attach();
@@ -215,7 +217,11 @@ try {
   }
   socket?.close();
   for (const task of pending.values()) clearTimeout(task.timer);
-  try { process.platform === 'win32' ? child.kill('SIGKILL') : process.kill(-child.pid, 'SIGKILL'); } catch {}
+  try {
+    if (process.platform === 'win32') {
+      if (child.exitCode === null && child.pid) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', timeout: 10000 });
+    } else process.kill(-child.pid, 'SIGKILL');
+  } catch {}
   await delay(400);
-  await rm(profile, { recursive: true, force: true });
+  await rm(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }

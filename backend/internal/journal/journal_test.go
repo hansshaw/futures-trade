@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -120,13 +121,16 @@ func TestPersistenceRevisionArchiveAndSnapshot(t *testing.T) {
 	if err != nil || snap.Journals[0].Revision != 2 || snap.Journals[0].Review != "" {
 		t.Fatal("snapshot overwritten", err)
 	}
-	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0600 {
-		t.Fatal("database permissions", info.Mode())
-	}
-	info, _ = os.Stat(filepath.Dir(path))
-	if info.Mode().Perm() != 0700 {
-		t.Fatal("directory permissions", info.Mode())
+	// Windows exposes read-only attributes rather than POSIX permission bits.
+	if runtime.GOOS != "windows" {
+		info, _ := os.Stat(path)
+		if info.Mode().Perm() != 0600 {
+			t.Fatal("database permissions", info.Mode())
+		}
+		info, _ = os.Stat(filepath.Dir(path))
+		if info.Mode().Perm() != 0700 {
+			t.Fatal("directory permissions", info.Mode())
+		}
 	}
 }
 

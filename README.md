@@ -113,6 +113,17 @@ npm start
 
 ## 验证与打包
 
+Windows x64 安装包在 [GitHub Releases](https://github.com/hansshaw/futures-trade/releases) 下载，文件名为 `CornWatch-<版本>-windows-x64-setup.exe`。安装向导支持选择目录，并创建桌面及开始菜单快捷方式；安装后无需单独安装 Node.js 或 Go。发行包暂未进行代码签名。
+
+在 Windows 上自行构建安装包：
+
+```powershell
+npm ci
+npm run package:win
+```
+
+输出位于 `release/`。手动运行 `Windows installer` 工作流可在 Windows 上测试、构建并验证安装后的桌面功能；工作流不自动发布 Release。卸载默认保留用户数据。
+
 ```bash
 cd backend
 go test -race ./...

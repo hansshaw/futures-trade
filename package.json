@@ -12,7 +12,8 @@
     "build": "npm run typecheck && npm run build:backend && vite build --config desktop/vite.config.ts",
     "typecheck": "tsc --noEmit -p desktop/tsconfig.json",
     "start": "node desktop/scripts/start.mjs",
-    "package": "npm run build && electron-builder --dir --config.electronDist=node_modules/electron/dist"
+    "package": "npm run build && electron-builder --dir --config.electronDist=node_modules/electron/dist",
+    "package:win": "npm run build && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -64,8 +65,19 @@
     },
     "win": {
       "target": [
-        "dir"
-      ]
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "artifactName": "${productName}-${version}-windows-${arch}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": false,
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": ["zh_CN", "en_US"]
     }
   }
 }
