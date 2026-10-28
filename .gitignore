@@ -1,0 +1,14 @@
+node_modules/
+desktop/dist/
+bin/
+release/
+data/
+.env
+.env.*
+!.env.example
+*.db
+*.db.lock
+*.log
+artifacts/
+__pycache__/
+

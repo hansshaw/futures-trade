@@ -1,0 +1,9 @@
+node_modules
+bin
+release
+data
+.git
+.env*
+artifacts
+desktop
+codex-harness-analysis.html

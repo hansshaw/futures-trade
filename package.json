@@ -1,0 +1,71 @@
+{
+  "name": "cornwatch",
+  "version": "0.2.0",
+  "private": true,
+  "description": "CornWatch · 中国玉米期货监控与量化研究工作台",
+  "author": "CornWatch",
+  "main": "desktop/electron/main.cjs",
+  "scripts": {
+    "dev": "node desktop/scripts/run.mjs dev",
+    "dev:web": "vite --config desktop/vite.config.ts --host 127.0.0.1",
+    "build:backend": "node desktop/scripts/build-backend.mjs",
+    "build": "npm run typecheck && npm run build:backend && vite build --config desktop/vite.config.ts",
+    "typecheck": "tsc --noEmit -p desktop/tsconfig.json",
+    "start": "node desktop/scripts/start.mjs",
+    "package": "npm run build && electron-builder --dir --config.electronDist=node_modules/electron/dist"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.7.2",
+    "vite": "^6.3.5"
+  },
+  "build": {
+    "appId": "com.cornwatch.desktop",
+    "productName": "CornWatch",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/dist/**/*",
+      "desktop/electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      },
+      {
+        "from": "desktop/dist",
+        "to": "ui"
+      }
+    ],
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Finance"
+    },
+    "mac": {
+      "target": [
+        "dir"
+      ],
+      "category": "public.app-category.finance"
+    },
+    "win": {
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}

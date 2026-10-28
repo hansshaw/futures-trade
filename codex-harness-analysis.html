@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="从公开 Codex 源码与官方文档，深入分析 agent harness 的提示词、运行时、上下文、会话历史、记忆、MCP 与多 agent 协作。">
+<title>Codex Harness 解剖图谱 · 上下文与会话的工程</title>
+<style>
+:root{color-scheme:dark;--bg:#10151b;--surface:#171e26;--surface2:#1d2731;--ink:#e9eff3;--muted:#a6b5c3;--line:#34424f;--teal:#78dac8;--amber:#f1c27a;--blue:#90baf3;--red:#ef969c;--nav:258px;--radius:14px;--mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+:root[data-theme=light]{color-scheme:light;--bg:#f5f4ef;--surface:#fffefa;--surface2:#eaece7;--ink:#1b2a33;--muted:#536773;--line:#c8d0cc;--teal:#096d60;--amber:#895918;--blue:#285d9c;--red:#a43d49}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:28px}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.85 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}a{color:var(--teal);text-decoration-thickness:1px;text-underline-offset:4px}a:hover{color:var(--amber)}button,input,select{font:inherit}button,select{cursor:pointer}button,a,input,select,summary{outline-offset:5px}button{border:1px solid var(--line);background:var(--surface2);color:var(--ink);border-radius:8px;padding:8px 14px;line-height:1.5}button:hover{border-color:var(--teal)}button[aria-pressed=true],button.active{background:var(--teal);border-color:var(--teal);color:var(--bg)}button:disabled{opacity:.45;cursor:default}h1,h2,h3,h4{line-height:1.35;letter-spacing:-.025em}h1{font-size:clamp(38px,5.1vw,76px);font-weight:650;max-width:1000px;margin:20px 0 24px}h2{font-size:clamp(27px,3vw,39px);margin:6px 0 18px}h3{font-size:22px;margin:34px 0 12px}h4{font-size:17px;margin:0 0 10px}p{margin:12px 0 18px}strong{font-weight:650}small,.small{font-size:13px;color:var(--muted)}code{font: .88em/1.7 var(--mono);background:var(--surface2);padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}pre{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:22px;white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.9 var(--mono);tab-size:2}pre code{padding:0;background:none;font:inherit}ul,ol{padding-left:24px}li{margin:7px 0}blockquote{margin:22px 0;padding:4px 0 4px 22px;border-left:3px solid var(--amber);color:var(--muted)}
+.sidebar{width:var(--nav);position:fixed;inset:0 auto 0 0;padding:30px 20px;background:var(--surface);border-right:1px solid var(--line);overflow:auto;z-index:10}.brand{font:12px/1.6 var(--mono);letter-spacing:.12em;color:var(--teal)}.sidebar-title{font-size:21px;font-weight:650;margin:10px 0 24px}.sidebar nav a{display:block;text-decoration:none;color:var(--muted);font-size:14px;padding:9px 10px;border-left:2px solid transparent;margin:3px 0}.sidebar nav a.active{color:var(--teal);border-color:var(--teal);background:var(--surface2)}.sidebar nav span{color:var(--muted);font-family:var(--mono);font-size:11px;margin-right:10px}.sidebar-footer{margin-top:30px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.theme-controls{display:flex;gap:8px;margin-top:14px}.theme-controls button{font-size:12px;padding:6px 10px}
+main{margin-left:var(--nav);padding:0 5.5vw 80px;max-width:1800px}.hero{min-height:650px;padding:70px 0 56px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;justify-content:center}.eyebrow{font:12px/1.5 var(--mono);letter-spacing:.15em;color:var(--teal);text-transform:uppercase}.hero .lead{font-size:21px;max-width:880px;color:var(--muted)}.hero em{font-style:normal;color:var(--teal)}.hero-meta{display:flex;gap:12px;flex-wrap:wrap;margin:22px 0}.tag{border:1px solid var(--line);border-radius:30px;padding:3px 11px;font-size:12px;color:var(--muted)}.hero-bottom{display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-top:30px}.hero-bottom a{text-decoration:none}.chapter{padding:68px 0 52px;border-bottom:1px solid var(--line)}.chapter-no{font:12px/1.6 var(--mono);letter-spacing:.12em;color:var(--amber);margin-bottom:10px}.intro{font-size:19px;color:var(--muted);max-width:970px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.panel{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--surface)}.panel p:last-child{margin-bottom:0}.panel h3{margin-top:0}.accent{color:var(--teal)}.amber{color:var(--amber)}.muted{color:var(--muted)}.label{font:12px/1.6 var(--mono);letter-spacing:.05em;color:var(--muted)}.callout{padding:18px 22px;border-left:3px solid var(--teal);background:var(--surface);margin:25px 0}.callout.warn{border-color:var(--amber)}.callout p{margin:4px 0}.evidence{display:inline-flex;align-items:center;font-size:11px;line-height:1.6;padding:2px 7px;border:1px solid var(--line);border-radius:5px;letter-spacing:0;vertical-align:middle;white-space:nowrap}.verified{color:var(--teal)}.design{color:var(--amber)}.inferred{color:var(--blue)}.ref{font:12px/1.6 var(--mono);white-space:nowrap;text-decoration:none;margin-left:5px}.source-line{font-size:13px;color:var(--muted);margin-top:16px}.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:22px 0}table{width:100%;border-collapse:collapse;font-size:14px;text-align:left}th,td{padding:15px 17px;border-bottom:1px solid var(--line);vertical-align:top;min-width:130px}th{background:var(--surface2);font-weight:600}tr:last-child td{border-bottom:0}td:first-child{font-weight:550}details{border-top:1px solid var(--line);margin-top:20px;padding-top:14px}summary{cursor:pointer;font-weight:600;color:var(--teal);padding:7px 0}details[open] summary{margin-bottom:12px}.diagram{padding:30px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin:28px 0}.diagram-title{display:flex;justify-content:space-between;gap:20px;margin-bottom:20px;font-size:14px;color:var(--muted)}.flow{display:flex;align-items:stretch;gap:10px}.flow .node{flex:1;padding:17px 14px;background:var(--surface2);border-radius:8px;min-width:0}.node strong{display:block;font-size:15px;margin-bottom:6px}.node span{display:block;font-size:13px;color:var(--muted)}.arrow{display:flex;align-items:center;justify-content:center;color:var(--teal);font-size:20px}.flow .node.highlight{box-shadow:inset 0 0 0 1px var(--teal)}.loop-return{color:var(--teal);text-align:center;border-bottom:1px solid var(--line);margin:20px 15px 0;padding:0 0 15px;font-size:13px}.diagram-caption{font-size:13px;color:var(--muted);margin:18px 0 0}.section-nav{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}.interactive{padding:28px;border:1px solid var(--line);border-radius:var(--radius);margin:28px 0;background:var(--surface)}.interactive h3{margin:0 0 8px}.readout{padding:20px;background:var(--surface2);border-radius:10px;min-height:130px}.readout h4{color:var(--teal)}.readout p{margin:8px 0}.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:20px 0}.range-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:24px 0}.range-grid label{display:block;font-size:14px}.range-grid output{float:right;color:var(--teal);font-family:var(--mono)}input[type=range]{width:100%;accent-color:var(--teal);margin-top:12px}.budget-bar{display:flex;width:100%;height:42px;border-radius:6px;overflow:hidden;background:var(--surface2);margin:18px 0}.budget-bar div{height:100%;min-width:0;transition:width .2s;display:flex;align-items:center;justify-content:center;font:12px/1 var(--mono);color:#10151b;white-space:nowrap}.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.legend i{display:inline-block;width:9px;height:9px;margin-right:5px;border-radius:2px}.budget-stats{display:flex;gap:30px;flex-wrap:wrap;margin:18px 0}.budget-stats strong{font:25px/1.4 var(--mono);display:block;color:var(--teal)}.budget-stats span{font-size:12px;color:var(--muted)}.timeline{display:grid;grid-template-columns:repeat(9,1fr);gap:7px;margin:20px 0}.timeline button{padding:11px 2px;font-size:12px;min-width:0}.timeline button.active{font-weight:650}.timeline button.checkpoint{border-color:var(--amber)}.split-label{font-size:12px;letter-spacing:.08em;color:var(--muted);margin-bottom:10px}.tokens{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.token{padding:5px 10px;border-radius:5px;border:1px solid var(--line);font-size:12px}.token.on{background:var(--surface2);border-color:var(--teal)}.token.off{opacity:.5;text-decoration:line-through}.state-diagram{display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:20px;align-items:center}.state-center{border:1px solid var(--teal);padding:24px;border-radius:10px;text-align:center}.stack{display:grid;gap:10px}.stack div{padding:14px;background:var(--surface2);border-radius:8px;font-size:14px}.stack small{display:block}.memory-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.memory-steps button{text-align:left;padding:15px}.memory-steps strong{display:block;font-size:14px}.memory-steps span{display:block;font-size:12px;opacity:.8}.mcp-steps{display:flex;gap:7px;flex-wrap:wrap}.mcp-steps button{font-size:12px;flex:1;min-width:110px}.agent-tree{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}.agent-tree .root{grid-column:1/-1;max-width:440px;justify-self:center;width:100%;border-color:var(--teal)}.agent-tree button{text-align:left;padding:17px}.agent-tree button span{display:block;font-size:12px;opacity:.85}.agent-connect{grid-column:1/-1;text-align:center;color:var(--teal);font-size:13px}.compare-good{border-top:2px solid var(--teal)}.compare-risk{border-top:2px solid var(--amber)}.checklist{list-style:none;padding:0}.checklist li{padding:12px 0 12px 28px;border-bottom:1px solid var(--line);position:relative}.checklist li:before{content:"↳";position:absolute;left:0;color:var(--teal)}.source-list{padding:0;list-style:none;counter-reset:source}.source-list li{padding:18px 0;border-bottom:1px solid var(--line)}.source-list b{color:var(--amber);font:12px var(--mono);margin-right:10px}.source-list small{display:block;margin-top:5px}.source-list code{font-size:11px}.footer{padding-top:28px;color:var(--muted);font-size:13px}.mobile-top{display:none}.progress-line{position:fixed;top:0;left:var(--nav);height:3px;background:var(--teal);z-index:30;width:0;pointer-events:none}.nowrap{white-space:nowrap}.formula{font:15px/1.8 var(--mono);padding:17px 22px;background:var(--surface2);border-radius:8px;overflow-wrap:anywhere}.rubric{font-size:14px}.reading-path{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:24px}
+@media(min-width:1550px){main{padding-left:80px;padding-right:80px}}@media(max-width:1100px){:root{--nav:218px}main{padding-left:4vw;padding-right:4vw}.sidebar{padding:24px 14px}.grid3{grid-template-columns:1fr}.flow{flex-wrap:wrap}.flow .node{flex-basis:42%}.flow .arrow{flex-basis:6%}.state-diagram{grid-template-columns:1fr}.memory-steps{grid-template-columns:1fr 1fr}}
+@media(max-width:800px){h1{font-size:clamp(30px,8.2vw,36px);text-wrap:balance}:root{--nav:0px}.sidebar{display:none}main{margin-left:0;padding:0 22px 50px}.mobile-top{display:flex;justify-content:space-between;align-items:center;padding:20px 22px;background:var(--surface);border-bottom:1px solid var(--line)}.mobile-top select{max-width:190px;background:var(--surface2);color:var(--ink);border:1px solid var(--line);padding:6px;border-radius:6px}.hero{min-height:540px;padding:45px 0}.hero .lead{font-size:18px}.chapter{padding-top:48px}.grid2,.range-grid{grid-template-columns:1fr}.diagram,.interactive{padding:20px}.timeline{grid-template-columns:repeat(3,1fr)}.agent-tree{grid-template-columns:1fr}.agent-tree .root,.agent-connect{grid-column:1}.flow .node{flex-basis:100%}.flow .arrow{flex-basis:100%;transform:rotate(90deg);height:16px}.panel{padding:21px}.progress-line{left:0}th,td{padding:12px}.memory-steps{grid-template-columns:1fr 1fr}.hero-bottom{gap:15px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}@media print{:root{--bg:white;--surface:white;--surface2:#eee;--ink:#111;--muted:#444;--line:#bbb;--teal:#075f56;--amber:#774c0e;--blue:#174577;--nav:0px;color-scheme:light}.sidebar,.mobile-top,.progress-line,.no-print{display:none!important}main{margin:0;padding:0}.hero{min-height:0;padding:30px 0}h1{font-size:38px}.chapter{padding:28px 0;break-before:page}.panel,.diagram,.interactive,pre,tr{break-inside:avoid}.grid2{gap:15px}.source-list a{overflow-wrap:anywhere}a{color:var(--teal)}.readout{min-height:0}body{font-size:11pt}.intro{font-size:13pt}.budget-bar{print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<div class="progress-line" id="progress-line"></div>
+<aside class="sidebar">
+  <div class="brand">ENGINEERING FIELD NOTES / 26.10</div>
+  <div class="sidebar-title">Harness<br>解剖图谱</div>
+  <nav aria-label="报告目录">
+    <a href="#overview"><span>00</span>整体架构与边界</a>
+    <a href="#prompt"><span>01</span>系统提示词设计</a>
+    <a href="#runtime"><span>02</span>Runtime 执行循环</a>
+    <a href="#context"><span>03</span>上下文工程 · 重点</a>
+    <a href="#history"><span>04</span>历史与会话恢复 · 重点</a>
+    <a href="#memory"><span>05</span>短期与长期记忆</a>
+    <a href="#mcp"><span>06</span>MCP 连接与工具路由</a>
+    <a href="#agents"><span>07</span>子 Agent 与多 Agent</a>
+    <a href="#blueprint"><span>08</span>实现蓝图与取舍</a>
+    <a href="#sources"><span>09</span>来源与源码导航</a>
+  </nav>
+  <div class="sidebar-footer">核对日期：2026-10-26<br>公开源码快照：970111f6cb62<br>独立文件 · 无联网依赖
+    <div class="theme-controls"><button type="button" id="theme-toggle">切换明暗</button><button type="button" id="print-button">打印 / PDF</button></div>
+  </div>
+</aside>
+<div class="mobile-top"><span class="brand">HARNESS / 图谱</span><label><span class="small">跳转 </span><select id="mobile-nav" aria-label="跳转章节"><option value="#top">封面</option><option value="#overview">整体架构</option><option value="#prompt">系统提示词</option><option value="#runtime">Runtime</option><option value="#context">上下文工程</option><option value="#history">会话历史</option><option value="#memory">记忆</option><option value="#mcp">MCP</option><option value="#agents">多 Agent</option><option value="#blueprint">实现蓝图</option><option value="#sources">来源</option></select></label></div>
+<main id="top">
+<header class="hero">
+  <div class="eyebrow">Codex &amp; Agent Harness / Technical Atlas</div>
+  <h1>让模型持续工作的，<br>是一整套<em>状态管理系统。</em></h1>
+  <p class="lead">从系统提示词到执行循环，从上下文窗口到历史存储，拆解 Codex 这类 harness 如何把一次次模型调用，组织成可持续、可恢复、可协作的工作过程。</p>
+  <div class="hero-meta"><span class="tag">上下文 / 历史会话为核心</span><span class="tag">公开文档 × 源码阅读</span><span class="tag">中文深度分析</span><span class="tag">2026-10-26</span></div>
+  <div class="hero-bottom"><a href="#context">直接进入上下文工程 ↓</a><a href="#history">查看会话恢复机制 ↓</a><span class="small">含 6 组交互演示 · 所有数值演示均明确标注为假设</span></div>
+</header>
+
+<section class="chapter" id="overview">
+  <div class="chapter-no">00 / THE BIG PICTURE</div>
+  <h2>Harness 是什么，它真正管理什么？</h2>
+  <p class="intro">Harness 是包围模型的执行与协调系统。模型负责在当前输入下生成下一步；harness 负责准备输入、执行工具、保存状态、处理权限与中断，再把结果交回模型。</p>
+  <div class="callout"><p><strong>核心判断：</strong>一个可用的 agent，依赖“模型能力 × 上下文质量 × 执行可靠性 × 外部反馈”。只调整提示词，无法补齐持久化、工具隔离和恢复语义。<span class="evidence design">架构分析</span></p></div>
+  <div class="diagram" role="img" aria-label="用户和产品界面通过 harness 连接模型、执行工具、持久化存储和外部系统">
+    <div class="diagram-title"><span>四个平面：交互、控制、执行、状态</span><span class="evidence verified">公开实现 + 抽象整理</span></div>
+    <div class="flow"><div class="node"><strong>产品界面 / Client</strong><span>CLI、IDE、桌面应用<br>输入、进度、审批、文件视图</span></div><div class="arrow">→</div><div class="node highlight"><strong>Harness / Runtime</strong><span>线程与回合、上下文装配<br>工具路由、策略、调度</span></div><div class="arrow">⇄</div><div class="node"><strong>模型服务</strong><span>当前请求 → 输出 items<br>文字、工具调用、压缩状态</span></div></div>
+    <div class="flow" style="margin-top:18px"><div class="node"><strong>执行平面</strong><span>shell、文件、补丁、进程<br>权限与沙箱、工具超时</span></div><div class="arrow">⇄</div><div class="node"><strong>状态平面</strong><span>rollout、SQLite、检查点<br>记忆、工作区、产物</span></div><div class="arrow">⇄</div><div class="node"><strong>外部系统</strong><span>MCP 服务与业务 API<br>身份认证、数据和副作用</span></div></div>
+    <p class="diagram-caption">模型通常不会直接持有电脑和数据库的句柄。它输出结构化动作，由宿主选择并执行。公开 Codex 将核心执行能力通过 app-server 暴露给不同客户端。<a class="ref" href="#s1">[D1]</a><a class="ref" href="#s2">[D2]</a></p>
+  </div>
+  <h3>先把六类“状态”分开</h3>
+  <div class="table-wrap"><table><thead><tr><th>状态</th><th>保存什么</th><th>生命周期</th><th>关键边界</th></tr></thead><tbody>
+  <tr><td>模型活动上下文</td><td>当前输入、保留历史、工具结果、压缩项</td><td>一次请求及后续续接</td><td>受 token 预算约束；不会自动包含所有历史</td></tr>
+  <tr><td>持久会话历史</td><td>消息、调用、事件、回合参数、检查点</td><td>跨进程 / 跨恢复</td><td>可显示、检索和重建，不等于整份送给模型</td></tr>
+  <tr><td>运行时状态</td><td>任务、取消信号、流、进程、工具中的会话句柄</td><td>宿主或执行环境存活期间</td><td>对话保存成功，不代表所有句柄能跨重启恢复</td></tr>
+  <tr><td>工作区状态</td><td>文件、Git 变更、产物、测试结果</td><td>磁盘 / worktree 生命周期</td><td>聊天分叉和回退，不自动复制或撤销文件</td></tr>
+  <tr><td>长期记忆</td><td>从过往任务提炼的事实、决策、偏好和证据入口</td><td>跨会话，有筛选和更新</td><td>历史派生知识，需按范围使用并验证时效</td></tr>
+  <tr><td>推理缓存</td><td>服务端可复用的输入前缀计算</td><td>缓存策略决定</td><td>降低计算开销，不增加语义容量，也不是用户记忆</td></tr>
+  </tbody></table></div>
+  <p>贯穿本报告的模型是：<strong>历史是证据账本，上下文是工作台，记忆是索引与提炼，工作区是成果与事实所在。</strong>它们之间需要显式的读写和同步规则。</p>
+  <h3>证据范围与版本边界</h3>
+  <p>本报告以官方文档及公开 <code>openai/codex</code> 仓库快照 <code>970111f6cb62cc02fe36a82ea7d71b37a2889c97</code> 为依据，提交时间为 2026-10-23。源码能证明该快照存在某条实现路径，不能证明每个桌面、云端、账户和模型都启用了它。实验开关、托管后端和产品层会改变具体行为。</p>
+  <p><span class="evidence verified">已验证</span> 表示公开文档或源码可支持；<span class="evidence design">设计建议</span> 表示可借鉴的实现方案；<span class="evidence inferred">推断</span> 表示根据接口和模块关系推导。下文没有复原本次会话的隐藏提示词，也不把公开模板当作线上完整配置。</p>
+</section>
+
+<section class="chapter" id="prompt">
+  <div class="chapter-no">01 / PROMPT AS A COMPILED POLICY</div>
+  <h2>系统提示词：把工作规范编译成模型可执行的约束</h2>
+  <p class="intro">实际工程中，“系统提示词”往往是多来源上下文的装配结果。基础行为、产品约定、项目规则、工具协议与当前环境，各有不同更新频率和可信度。</p>
+  <h3>1.1 逻辑：分层、按需、明确冲突规则</h3>
+  <p>高层指令规定角色、持续工作方式和权限边界；项目指令补充构建命令、目录习惯和验收要求；当前任务给出目标和局部约束；工具结果提供事实。将这些内容混成一段无来源的文本，会让模型难以区分“应该遵守什么”和“只是看到了什么”。</p>
+  <p>公开源码的 <code>render_model_instructions</code> 从已解析的模型元数据读取模板；独立的提示词模块处理权限、多 agent、模式等片段。模型和客户端可以有不同模板，不能用某个历史版本的 Markdown 文件代表所有运行配置。<a class="ref" href="#c1">[C1]</a></p>
+  <div class="interactive" id="prompt-explorer">
+    <div class="label">交互 01 / 指令装配器</div><h3>点击一层，查看职责与边界</h3>
+    <div class="section-nav" role="group" aria-label="提示词层"><button data-prompt="base" aria-pressed="true">基础与产品约定</button><button data-prompt="policy" aria-pressed="false">权限与工具</button><button data-prompt="project" aria-pressed="false">项目与技能</button><button data-prompt="task" aria-pressed="false">当前任务</button><button data-prompt="data" aria-pressed="false">外部证据</button></div>
+    <div class="readout" id="prompt-detail" aria-live="polite"><h4>基础与产品约定</h4><p>角色、协作方式、持续推进、完成标准和答复形式。适合保持稳定并形成可复用前缀。公开 harness 的模板只是完整指令装配的一部分。</p></div>
+    <p class="small">此图按职责划分，不宣称每一层都对应一个固定 API role。实际优先级由消息角色、指令体系和运行时规则共同决定。</p>
+  </div>
+  <h3>1.2 具体实现：一个可测试的 Prompt Builder</h3>
+  <div class="grid2"><div>
+    <p><strong>输入：</strong>模型配置、当前模式、权限快照、项目规则、技能目录、工具目录、环境信息与活动历史。</p>
+    <p><strong>处理：</strong>解析配置 → 发现规则 → 标注来源和作用域 → 选择适用片段 → 预算检查 → 按稳定顺序输出消息与工具定义。</p>
+    <p><strong>输出：</strong>带角色与结构化内容的请求，不只是一个长字符串。工具 schema、call ID、消息 phase 等也属于行为协议。</p>
+  </div><pre><code># 通用设计示意，不是 Codex 原函数
+request = PromptBuilder(
+  model_instructions = resolved_model.template,
+  developer_fragments = [
+    product_contract,
+    permission_snapshot,
+    active_mode,
+    selected_extension_context
+  ],
+  project_context = discovered_instructions,
+  input_items = active_history,
+  tools = visible_tool_catalog
+).validate_and_build()</code></pre></div>
+  <p><span class="evidence verified">项目指令发现</span> 官方文档描述了全局规则与项目根目录至当前目录的发现链；每个目录优先选择 <code>AGENTS.override.md</code>，否则选择 <code>AGENTS.md</code> 或配置的备用名，再按路径顺序组合，并受文件预算限制。这是项目规则机制，不意味着文件名本身拥有 system 权限。<a class="ref" href="#s3">[D3]</a></p>
+  <h3>1.3 好的提示词需要把模糊口号变成决策条件</h3>
+  <div class="table-wrap"><table><thead><tr><th>设计点</th><th>可执行的写法思路</th><th>为什么有用</th></tr></thead><tbody>
+  <tr><td>持续推进</td><td>动作请求应完成实现、适当验证和交付；缺少关键条件时记录阻塞</td><td>减少“只给计划”“工具回来就结束”等提前停止</td></tr>
+  <tr><td>工具选择</td><td>给出何时搜索、何时读文件、何时用专用 API 的边界和反例</td><td>工具名不能完整表达成本、适用范围与副作用</td></tr>
+  <tr><td>完成标准</td><td>要求结果可检查，区分“已实现”“已运行”“验证通过”</td><td>让 final 对应可观测成果，避免无证据的完成声明</td></tr>
+  <tr><td>上下文节制</td><td>先定位再局部读取；大型输出保存为产物并返回摘要与入口</td><td>减少低价值 token，保留可继续调查的路径</td></tr>
+  <tr><td>信任边界</td><td>外部页面、日志和子 agent 消息带来源，不能自行升级为用户授权</td><td>降低提示注入与授权误传</td></tr>
+  <tr><td>交互协议</td><td>明确进度与最终答案、调用与结果、成功与待处理的区别</td><td>UI 与控制循环能正确识别生命周期</td></tr>
+  </tbody></table></div>
+  <div class="grid2"><div class="panel compare-good"><h4>优点</h4><p>修改成本低、易于表达语义规则；能随模型调整；项目与技能可组合；可通过行为评测快速迭代。</p></div><div class="panel compare-risk"><h4>缺点与失效方式</h4><p>规则越多越容易冲突；长模板消耗预算并稀释任务；模型遵守是概率行为。安全和一致性不能完全交给语言约束。</p></div></div>
+  <p class="callout warn"><strong>工程边界：</strong>“不要越权”写在提示词里是软约束；文件写入限制、工具白名单和审批状态机才是宿主执行的硬边界。配置“永不询问审批”也不等于获得无限文件或网络权限。</p>
+</section>
+
+<section class="chapter" id="runtime">
+  <div class="chapter-no">02 / THE EXECUTION ENGINE</div>
+  <h2>Runtime：把输出变成动作，再把世界的反馈交回模型</h2>
+  <p class="intro">一次用户请求可以包含许多次模型请求和工具执行。Runtime 管理这个回合的推进，并处理用户插入的新信息、异步结果、取消与失败。</p>
+  <div class="diagram" role="img" aria-label="执行循环：接收输入、准备上下文、调用模型、分派工具、观察结果，然后继续直到完成">
+    <div class="flow"><div class="node"><strong>接收输入</strong><span>start / steer<br>任务、参数、取消状态</span></div><div class="arrow">→</div><div class="node"><strong>构建上下文</strong><span>配置快照、历史<br>预算、必要时压缩</span></div><div class="arrow">→</div><div class="node"><strong>流式模型请求</strong><span>输出增量与 items<br>工具调用 / 消息</span></div><div class="arrow">→</div><div class="node"><strong>分派与记录</strong><span>验证、执行、回填<br>输出事件与持久化</span></div></div>
+    <div class="loop-return">← 有工具结果 / 待处理输入 / 继续条件时，构建下一次请求 ←</div>
+    <p class="diagram-caption">公开代码的回合循环会结合模型继续标记和待处理输入决定是否继续，并在循环中检查自动压缩。此图省略重试、hooks、审批和异常分支。<a class="ref" href="#c2">[C2]</a></p>
+  </div>
+  <h3>2.1 数据模型：Thread → Turn → Item</h3>
+  <p><strong>Thread</strong> 是可持续的对话容器；<strong>Turn</strong> 是一次用户请求及后续工作；<strong>Item</strong> 是消息、工具调用、命令执行、文件变更等输入输出单位。一次模型推理请求只是 turn 内的一步。由这些层次生成进度事件，UI 才能展示“正在运行工具”，并在真正完成时关闭回合。<a class="ref" href="#s2">[D2]</a></p>
+  <div class="grid2"><div class="panel"><h4>控制面：app-server</h4><p>连接先完成初始化握手，再建立或恢复线程，通过回合方法驱动工作，接收 item 与 turn 事件。客户端、核心执行逻辑和展示因此解耦；CLI、IDE 和桌面可以复用核心能力。</p><p class="small">接口示例见第 04 章。具体传输与字段需以对应版本的 app-server schema 为准。</p></div><div class="panel"><h4>执行面：宿主和工具 Runtime</h4><p>工具路由器解析模型的结构化调用，将参数映射到执行器；执行器处理权限、工作目录、超时和输出。长命令可返回进程会话句柄，随后读取输出；句柄是执行器状态，不能只从聊天文本恢复。</p></div></div>
+  <h3>2.2 调度中的几个关键选择</h3>
+  <ul><li><strong>并行与串行：</strong>独立读取可以并发；修改同一资源、依赖上一步结果、授权判断应按顺序处理。并行工具调用不等于多 agent；前者仍可由一个模型上下文发起。</li><li><strong>流式与最终态：</strong>增量文本先展示，完成的 item 再进入规范记录。应保留消息类型和 phase 等元数据，避免恢复时把进度当作最终交付。<a class="ref" href="#s4">[D4]</a></li><li><strong>插入新输入：</strong>用户 steering 需要进入当前任务的待处理输入；取消应传播到模型流、工具和子任务，而不能只让 UI 停止动画。</li><li><strong>重试：</strong>网络读取和模型流可以重试，但带副作用的调用必须识别“已执行、响应丢失”的情况。通用分布式系统设计需要操作 ID、幂等键或执行前查询，不能假设所有工具恰好执行一次。</li><li><strong>输出治理：</strong>原始工具结果可以很大，模型需要的是可消费结果。截断应保留错误原因、总量、产物入口与查询方式。</li></ul>
+  <details><summary>参考状态机与最小执行循环</summary>
+  <pre><code># 架构示意，省略实际 Codex 类型
+IDLE → PREPARING → SAMPLING → DISPATCHING → OBSERVING
+                         ↘ AWAITING_APPROVAL ↗
+                  ↑  有待处理工作时返回  ↓
+                COMPACTING        COMPLETED / FAILED / CANCELLED
+
+while not cancelled:
+    incorporate_pending_input()
+    context = assemble_and_validate_current_window()
+    ensure_context_budget(context)
+    response = stream_model(context)
+    persist_completed_items(response)
+    calls = parse_and_validate_tool_calls(response)
+    results = await dispatch_under_policy(calls)
+    append_normalized_results(results)
+    if no_more_work(response, pending_input, results):
+        finish_turn()
+        break</code></pre></details>
+  <h3>2.3 具体 Runtime：异步宿主与程序化工具层</h3>
+  <p>公开 Codex 核心以 Rust 实现，使用 Tokio 的任务、channel、watch 和取消机制组织异步工作。线程管理器保存可加载的线程对象；模型适配器处理流；工具执行器负责实际动作；记录器和扩展通过明确边界接入。这里的 runtime 包含任务系统与协议适配，不只是一个解释器。</p>
+  <p>在启用 Code Mode 的路径中，模型可生成 JavaScript，把多个工具调用组合成程序。公开工具描述定义了每个执行单元使用新的 V8 isolate，并通过宿主暴露的工具委托访问能力；它不是任意 Node.js 环境，也不直接拥有文件和网络 API。执行单元结束会释放 isolate，跨单元保留的数据需要显式存储机制。长执行有执行、让出、等待和终止等协议；宿主可通过进程或远端 provider 管理这层运行环境。<a class="ref" href="#c12">[C12]</a></p>
+  <pre><code>// 程序化工具编排示意；工具名和输出函数随环境而异
+const results = await Promise.all([
+  tools.read_file({ path: "module-a.ts" }),
+  tools.read_file({ path: "module-b.ts" })
+]);
+// 在执行层筛选和聚合，只把当前判断需要的结果返回给模型。
+// 原始工具证据仍应通过 Runtime 记录或产物入口保留。</code></pre>
+  <p>它能减少“模型调用 → 一个工具 → 模型调用”的往返次数，并避免让所有中间数据进入主模型上下文；代价是代码执行失败、未等待 promise、预算超限与取消传播都需要额外处理。程序化工具调用、持久 REPL、shell 进程和主 agent 的活动窗口，各有独立生命周期，不能当作同一块内存。</p>
+  <div class="grid2"><div class="panel compare-good"><h4>优点</h4><p>把复杂任务变成可观察的闭环；工具错误提供纠偏信号；模型与执行器可以独立升级；多客户端可共享同一协议。</p></div><div class="panel compare-risk"><h4>成本与局限</h4><p>状态、事件、持久化和 UI 容易不同步；重试可能重复副作用；长工具、断连和后台进程带来恢复难题。异步越多，越需要明确所有权和取消语义。</p></div></div>
+</section>
+
+<section class="chapter" id="context">
+  <div class="chapter-no">03 / CONTEXT ENGINEERING · FOCUS</div>
+  <h2>上下文管理：决定模型这一刻能“看见”什么</h2>
+  <p class="intro">上下文不是聊天记录的同义词。它是 harness 为下一次推理构造的有限输入视图：稳定规则、当前状态、近期工作，以及从旧历史中保留下来的信息。</p>
+  <h3>3.1 一个实用的上下文装配模型</h3>
+  <div class="formula">本次请求 ≈ 基础指令 + 工具目录 + 项目/环境片段 + 保留历史或压缩状态 + 最近交互 + 本次新输入</div>
+  <p>这只是逻辑拆分。实际序列化格式、服务端注入内容和模型计数方式会影响 token 数；某些配置由顶层参数表达，某些由消息表达。图片、音频、工具 schema、推理和加密项也不能按普通字符数精确换算。</p>
+  <p><span class="evidence verified">公开源码</span> 中，<code>ContextManager</code> 持有带元数据的 response item 列表、token 信息、上下文基线和保留事实。请求前会规范化工具调用与结果、移除孤立输出，并处理不支持的模态。该快照还把部分宿主保留事实与模型活动窗口分开存储。<a class="ref" href="#c3">[C3]</a></p>
+  <div class="state-diagram diagram" role="img" aria-label="完整历史和外部证据经选择、规范化和预算控制形成模型活动窗口">
+    <div class="stack"><div>完整持久历史<small>较早消息、工具结果、回合事件</small></div><div>工作区 / MCP / 检索<small>必要时重新读取的事实</small></div><div>记忆与项目规则<small>索引、摘要、适用范围</small></div></div>
+    <div class="state-center"><strong>选择 → 规范化 → 预算 → 压缩</strong><p class="small">保留来源、调用关系和当前任务状态<br>控制旧证据的数量与粒度</p></div>
+    <div class="stack"><div>模型活动窗口<small>本次实际可见内容</small></div><div>宿主保留状态<small>策略、来源、版本与恢复信息<br>不一定全部渲染给主模型</small></div></div>
+  </div>
+  <h3>3.2 预算管理：留出“继续工作”的空间</h3>
+  <p>不能等到窗口完全装满才压缩。下一步可能产生工具输出，模型还需要生成和推理的空间；压缩请求自身也要能处理待压缩输入。因此应设置低于硬上限的触发阈值，并在大输入加入前、连续执行中、模型切换到较小窗口时检查。</p>
+  <div class="interactive" id="budget-simulator">
+    <div class="label">交互 02 / 上下文预算实验</div><h3>为什么长日志会挤掉可用工作空间？</h3>
+    <p class="small">以下全部是假设参数，单位为 k tokens；不是任何 Codex 型号的窗口、阈值或计费数据。示例硬上限为 128k，预留 16k，压缩触发线为输入 96k。</p>
+    <div class="range-grid">
+      <label for="history-range">历史（可压缩部分） <output id="history-out">48k</output><input id="history-range" type="range" min="8" max="100" value="48"></label>
+      <label for="tools-range">工具结果 / 日志 <output id="tools-out">24k</output><input id="tools-range" type="range" min="0" max="64" value="24"></label>
+    </div>
+    <div class="controls"><label><input type="checkbox" id="budget-compact"> 将较早历史压缩为原来的 25%（教学假设）</label></div>
+    <div class="budget-bar" id="budget-bar" role="img" aria-label="当前上下文预算组成"></div>
+    <div class="legend"><span><i style="background:#90baf3"></i>规则与工具目录 12k</span><span><i style="background:#78dac8"></i>历史</span><span><i style="background:#f1c27a"></i>工具输出</span><span><i style="background:#b99be0"></i>新输入 4k</span><span><i style="background:#9ba8b5"></i>预留 16k</span></div>
+    <div class="budget-stats"><div><strong id="input-total">88k</strong><span>装配输入</span></div><div><strong id="budget-free">24k</strong><span>扣除预留后的余量</span></div><div><strong id="budget-state">可继续</strong><span>预算判断</span></div></div>
+    <div class="readout" id="budget-detail" aria-live="polite"></div>
+  </div>
+  <p>公开配置提供 <code>model_auto_compact_token_limit</code>，并区分按整个活动上下文或按携带前缀之后的增长计量。阈值、有效窗口与模型元数据有关；不要把一个固定百分比当成所有 Codex 版本的常量。<a class="ref" href="#s5">[D5]</a></p>
+  <h3>3.3 三种“减小上下文”不能混为一谈</h3>
+  <div class="table-wrap"><table><thead><tr><th>方式</th><th>做法</th><th>保留能力</th><th>主要风险</th></tr></thead><tbody>
+  <tr><td>截断 / 裁剪</td><td>减少单条工具输出，移除旧项或不支持的模态</td><td>直接降低体积；原始产物可另存</td><td>截掉关键错误、授权或精确值；破坏 call/result 配对</td></tr>
+  <tr><td>语义压缩 / Compaction</td><td>把旧窗口重写为更小的可续接状态，可能保留部分原始项</td><td>继续原任务，不必从零开始</td><td>细节丢失、错误结论固化、压缩开销与缓存失配</td></tr>
+  <tr><td>检索 / 按需读取</td><td>只引入当下相关的文件片段、历史或外部证据</td><td>可以回到原证据恢复精度</td><td>漏检、查询偏差、权限与时效不一致</td></tr>
+  </tbody></table></div>
+  <p>合理组合是：<strong>先在来源处控制输出，再用检索维持精确度，用压缩保存连续工作状态。</strong>无限制地把文件或网页全文塞进上下文，既昂贵，也会让重要约束淹没在噪声中。</p>
+  <h3>3.4 Compaction 的两条路径</h3>
+  <div class="grid2"><div class="panel"><h4>公开 harness 的文本摘要路径</h4><p>源码保留摘要提示、用户消息筛选和替换历史逻辑。压缩后以较小历史继续，必要时重注入当前配置与环境。该路径便于理解和诊断，但摘要可能漏掉精确细节。</p><p class="source-line"><code>core/src/compact.rs</code><a class="ref" href="#c4">[C4]</a></p></div><div class="panel"><h4>模型服务支持的压缩路径</h4><p>公开实现还存在远端压缩路径。Responses API 文档描述不透明的加密压缩项及保留项；这类状态应按协议原样续传，不能把它当成可以编辑的自然语言摘要。</p><p class="source-line"><code>compact_remote_v2*</code><a class="ref" href="#c4">[C4]</a><a class="ref" href="#s6">[D6]</a></p></div></div>
+  <p>两条路径说明“压缩”是接口与状态变换，不等于固定的一段摘要文本。API 的独立 compact 接口返回的是后续窗口；当前文档要求保留它返回的完整输出，而非只摘出一个加密项。具体 Codex 使用哪种路径，应查看对应模型、provider 和 feature flags。</p>
+  <h3>3.5 一个可靠的压缩检查点应该留下什么？</h3>
+  <div class="grid2"><div>
+    <ul><li><strong>目标：</strong>用户真正要完成的事，后续变更与明确撤销。</li><li><strong>约束：</strong>允许的操作、目录或分支范围、必须遵守的条件。</li><li><strong>事实：</strong>已经验证的结果、证据位置、文件与调用标识。</li><li><strong>工作状态：</strong>已完成、尚未完成、失败原因、下一步。</li><li><strong>不确定性：</strong>假设、未验证结论、可能过期的观察。</li><li><strong>协议状态：</strong>窗口编号、配置基线、版本、必要的来源与恢复元数据。</li></ul>
+  </div><pre><code># 通用检查点示例
+objective: 修复支付重试中的重复写入
+scope: services/payments, branch fix/retry
+constraints:
+  - 用户要求保留现有公开 API
+verified:
+  - 重试路径缺失幂等键；证据 retry.ts:87
+  - 最小复现保存在 artifacts/repro.json
+completed:
+  - 已完成复现；尚未改生产代码
+open:
+  - 事务边界待确认
+next:
+  - 读取 repository.ts 的写入路径
+uncertainty:
+  - 上次 CI 结果不是当前 HEAD 的结果</code></pre></div>
+  <p><span class="evidence design">上例为设计建议</span> 它强调“可继续工作所需状态”，并非完整思维过程的备份。压缩存在语义损失，不能保证任意旧细节都可由摘要还原；关键数字、原文和授权证据应保留可追溯入口。</p>
+  <h3>3.6 后台压缩最难的地方：并发一致性</h3>
+  <p>若压缩在后台运行，主线程可能继续收到用户纠正和新工具结果。一个基于旧窗口生成的候选检查点，不能覆盖新状态。通用做法是给历史增加版本号，记录候选的输入边界，安装前验证可兼容性，保留边界之后的新增后缀，不符合条件则放弃候选或转前台压缩。</p>
+  <p><span class="evidence verified">源码可见</span> 后台压缩候选、安装逻辑和历史修订字段，以及相关的恢复与并发测试；这表明 compaction 不只是一次“总结对话”的模型调用，还涉及宿主的状态替换协议。<a class="ref" href="#c3">[C3]</a><a class="ref" href="#c4">[C4]</a></p>
+  <h3>3.7 缓存：减少重复计算，不改变上下文容量</h3>
+  <p>稳定的规则、工具定义和历史前缀，有助于命中服务端 prompt cache。把每次变化的时间戳、工具顺序和无关环境信息放到前缀中间，会导致较早的位置发生变化，减少可复用前缀。压缩也会改变历史，所以应同时衡量输入体积、缓存复用和任务质量。<a class="ref" href="#s7">[D7]</a></p>
+  <div class="callout warn"><p><strong>三个常见误解：</strong>缓存命中不会让模型“额外记得”窗口外的内容；保存 thread ID 不保证保留原推理进程或 KV cache；较大的窗口也不自动解决相关性、噪声和过期事实问题。</p></div>
+  <h3>3.8 上下文工程的收益与代价</h3>
+  <div class="grid2"><div class="panel compare-good"><h4>收益</h4><p>允许任务轨迹超过单个窗口；主线程保留目标与关键决策；结合外部证据可以恢复精确度；预算可预测、输出更易审查。</p></div><div class="panel compare-risk"><h4>代价</h4><p>压缩增加延迟与调用成本；摘要可能失真；反复压缩会累计语义损失；裁剪、模态和工具协议兼容性复杂；需要专门评测恢复后的任务表现。</p></div></div>
+</section>
+
+<section class="chapter" id="history">
+  <div class="chapter-no">04 / DURABLE CONVERSATIONS · FOCUS</div>
+  <h2>历史会话管理：账本、投影、检查点与分叉</h2>
+  <p class="intro">会话持久化的目标，是能解释发生过什么，并在以后继续工作。恢复必须同时考虑模型历史、当前配置和真实工作区；重新显示聊天气泡只完成了其中一部分。</p>
+  <h3>4.1 公开实现的存储结构：不止一个 JSONL</h3>
+  <div class="table-wrap"><table><thead><tr><th>层次</th><th>公开实现的用途</th><th>为什么分开</th></tr></thead><tbody>
+  <tr><td>全局 message history</td><td><code>history.jsonl</code> 记录 <code>session_id / ts / text</code> 等输入历史字段</td><td>服务输入回忆和交互；不是完整的工具轨迹或恢复账本</td></tr>
+  <tr><td>会话 rollout</td><td>会话 JSONL 保存规范 items、元数据、回合上下文、压缩检查点等；新版存在分段压缩与 lineage 读取逻辑</td><td>保留可回放证据，支持恢复、派生视图和版本兼容</td></tr>
+  <tr><td>SQLite 状态与历史投影</td><td>线程元数据、查询，以及可分页的 turns/items 投影；通过记录边界和字节偏移增量物化</td><td>线程列表、搜索和长历史 UI 无需每次扫描所有文本</td></tr>
+  <tr><td>模型上下文检查点</td><td>替换历史、窗口身份、token 记录、恢复信息、保留来源等</td><td>只恢复最近有效窗口，避免把所有旧日志重新读入模型</td></tr>
+  <tr><td>诊断 Trace（可选）</td><td>显式启用后记录模型请求、工具、进程和协作的关联证据</td><td>排查“UI 看到了什么”“模型看到了什么”和实际执行差异</td></tr>
+  </tbody></table></div>
+  <p class="source-line">依据：message-history、rollout recorder、thread-store 物化与恢复代码，以及可选 rollout-trace 说明。<a class="ref" href="#c5">[C5]</a><a class="ref" href="#c6">[C6]</a><a class="ref" href="#c7">[C7]</a><a class="ref" href="#c12">[C12]</a></p>
+  <div class="callout warn"><p><strong>容易读错的配置：</strong><code>history.persistence = "none"</code> 针对 message history 的写入行为。不能仅凭它推断 rollout、状态库、工作区和所有诊断记录都不再落盘；需要分别检查各存储层及运行模式。</p></div>
+  <h3>4.2 事件账本与可查询视图，为什么要同时存在？</h3>
+  <p>从逻辑上，可以把会话存储理解为“有顺序的规范记录 + 可重建的查询投影”。JSONL 适合追加、检查和逐条回放；SQLite 适合列表、筛选、分页和跨字段查询。新版源码的物化过程从上次偏移读取完整记录批次，并更新投影检查点，不必每次重做全量解析。</p>
+  <p>两者共存会产生一致性问题：文件可能已经写入而投影尚未更新，UI 缓存也可能滞后。工程上应以完整记录边界推进投影，保存来源位置和修订信息；发现缺失或版本不兼容时修复投影。源码中的读取修订检查、物化和列表修复路径体现了这种思路，而非简单把两个存储分别写一遍。</p>
+  <pre><code>// 简化示例：表达概念，不是当前 wire schema 的逐字复制
+{"type":"session_meta", "payload":{"id":"T1", "history_mode":"paginated"}}
+{"type":"turn_context", "payload":{"turn_id":"U1", "model":"configured-model"}}
+{"type":"response_item", "payload":{"type":"message", "role":"user", "content":"修复重试"}}
+{"type":"response_item", "payload":{"type":"function_call", "call_id":"K1", "name":"read_file"}}
+{"type":"response_item", "payload":{"type":"function_call_output", "call_id":"K1", "output":"..."}}
+{"type":"compacted", "payload":{"replacement_history":["..."], "window_number":2}}
+
+SQLite projection checkpoint:
+  next_ordinal     → 下一个可物化记录序号
+  next_byte_offset → 下一个完整记录的来源偏移</code></pre>
+  <h3>4.3 恢复的核心算法：检查点 + 后缀</h3>
+  <p><span class="evidence verified">当前公开快照</span> 对 paginated 会话使用逆向扫描：遇到最近一个同时包含 <code>replacement_history</code> 和 <code>window_number</code> 的压缩记录即可停止，然后按时间顺序重建该检查点与其后记录。若最近检查点缺少这些字段，兼容逻辑会继续读取更早记录；legacy 会话仍可能全量回放。<a class="ref" href="#c7">[C7]</a></p>
+  <div class="interactive" id="history-simulator">
+    <div class="label">交互 03 / 历史回放实验</div><h3>磁盘记录全部可查，模型只装载有效窗口</h3>
+    <p class="small">教学场景：T1、T2 是两个旧回合，C 是完整压缩检查点；后续加入 T3，再出现中断与恢复。点击时间点，比较账本和模型窗口。</p>
+    <div class="timeline" role="group" aria-label="选择历史时间点">
+      <button data-history="0" aria-pressed="false">① 创建</button><button data-history="1" aria-pressed="false">② T1 输入</button><button data-history="2" aria-pressed="false">③ T1 工具</button><button data-history="3" aria-pressed="false">④ T2</button><button data-history="4" class="checkpoint" aria-pressed="false">⑤ 检查点 C</button><button data-history="5" aria-pressed="false">⑥ T3 输入</button><button data-history="6" aria-pressed="false">⑦ T3 工具</button><button data-history="7" aria-pressed="false">⑧ 进程退出</button><button data-history="8" aria-pressed="true">⑨ 冷恢复</button>
+    </div>
+    <div class="grid2"><div><div class="split-label">持久账本 / 可回看</div><div class="tokens" id="stored-tokens"></div></div><div><div class="split-label">模型窗口 / 本次可见</div><div class="tokens" id="active-tokens"></div></div></div>
+    <div class="readout" id="history-detail" aria-live="polite"></div>
+    <div class="controls"><button type="button" id="fork-demo">演示从检查点 C 分叉</button><button type="button" id="resume-demo">回到冷恢复</button></div>
+    <p class="small">演示中的退出标记用于解释状态变化，不表示真实 rollout 一定保存同名事件。原始历史仍可由存储查询；压缩后的模型并不自动看见所有旧明文。</p>
+  </div>
+  <details><summary>源码逻辑的简化表达：为什么恢复成本可被边界约束？</summary>
+  <pre><code># 依据 ModelContextScan 的逻辑简化
+collected = []
+requires_full_replay = False
+for item in rollout.scan_newest_to_oldest():
+    collected.append(item)
+    if item.is_compaction():
+        if not requires_full_replay:
+            if item.has_replacement_history_and_window_number():
+                break
+            requires_full_replay = True
+
+window_items = reverse(collected)
+context = replay_with_current_protocol(window_items)
+normalize_call_result_pairs(context)
+restore_configuration_baselines(context)
+
+# 分叉需要沿冻结的 lineage 截止边界读取；
+# 旧格式、缺失字段或部分损坏可迫使更大范围重建。</code></pre></details>
+  <p>检查点让近期恢复不必与会话总长度线性增长，但它也成为关键兼容边界。不能只存摘要而丢掉窗口编号、配置、工具来源和必要的恢复元数据。源码 <code>CompactedItem</code> 中除了替换历史，还保存多类恢复信息，正是为此服务。</p>
+  <h3>4.4 Resume、Fork、Revert、Archive 各改变什么？</h3>
+  <div class="table-wrap"><table><thead><tr><th>操作</th><th>对话语义</th><th>存储 / Runtime</th><th>工作区边界</th></tr></thead><tbody>
+  <tr><td>Read / List</td><td>查看已有记录</td><td>可分页读取；无需激活模型循环</td><td>不代表继续执行</td></tr>
+  <tr><td>Resume</td><td>在原线程继续</td><td>加载状态和最新模型窗口，重新建立所需能力</td><td>恢复时文件可能已变化；需要核对</td></tr>
+  <tr><td>Fork</td><td>从选定历史边界创建新线程</td><td>新 ID、继承前缀、新后缀；新版可通过 lineage 引用冻结边界</td><td>不会天然创建独立目录、分支或沙箱</td></tr>
+  <tr><td>Revert</td><td>移除指定回合及其后续可见历史</td><td>该快照可保持 thread ID，并切换到新 rollout 修订</td><td>不撤销文件修改或外部 API 的副作用</td></tr>
+  <tr><td>Archive</td><td>将历史归档，默认列表隐藏</td><td>仍保留恢复与读取入口；具体产品生命周期各异</td><td>归档记录不等于清理工作区</td></tr>
+  <tr><td>Ephemeral</td><td>临时会话 / 临时分叉</td><td>支持不加入持久线程历史的内存模式</td><td>文件和外部系统仍可能留下执行结果</td></tr>
+  </tbody></table></div>
+  <p class="source-line">接口参考当前 app-server 文档；分叉和修订实现参考 thread-store。当前文档已用 <code>thread/revert</code>，并标明旧 <code>thread/rollback</code> 已移除，不能直接复制旧教程。<a class="ref" href="#s2">[D2]</a><a class="ref" href="#c8">[C8]</a></p>
+  <details><summary>app-server 的具体接口如何连接这些语义？</summary>
+  <pre><code>// 按请求顺序展示；客户端要等待响应并使用真实返回的 ID
+{"id":1,"method":"initialize","params":{"clientInfo":{"name":"harness-demo","version":"0.1.0"}}}
+{"method":"initialized"}
+{"id":2,"method":"thread/start","params":{}}
+{"id":3,"method":"turn/start","params":{"threadId":"返回的线程ID","input":[{"type":"text","text":"分析当前模块"}]}}
+
+// 随后持续消费 item / turn 事件，而不是只读取一条文本响应。
+// 稍后查看元数据；这一步不激活执行：
+{"id":4,"method":"thread/read","params":{"threadId":"已保存的线程ID"}}
+
+// 重新加载线程；历史展示单独分页：
+{"id":5,"method":"thread/resume","params":{"threadId":"已保存的线程ID","excludeTurns":true}}
+
+// 主动压缩异步启动，完成状态由事件报告：
+{"id":6,"method":"thread/compact/start","params":{"threadId":"已保存的线程ID"}}</code></pre>
+  <p class="small">以上为 app-server 协议示例，不是直接调用模型服务的 Responses API。实际客户端还要处理错误、审批请求、断连、事件订阅和对应版本 schema。</p></details>
+  <h3>4.5 分叉实现：冻结前缀，不让父线程后来的工作渗入</h3>
+  <p>概念上 fork 是“复制历史”，实现上未必复制所有字节。新版公开代码保存 <code>history_base</code>，其中含来源记录序号和字节截止位置；lineage 表示祖先片段。分叉时先持久化来源，再确定边界，子线程沿该冻结前缀读取自己的继承历史。父线程继续产生的新记录不属于子线程前缀。</p>
+  <div class="diagram" role="img" aria-label="父线程共享到检查点的冻结前缀，之后父线程和子线程分别继续">
+    <div class="flow"><div class="node"><strong>共同前缀</strong><span>T1 → T2 → 检查点 C<br>冻结 ordinal / offset</span></div><div class="arrow">→</div><div class="node"><strong>原线程 T-A</strong><span>C → T3 → T4<br>继续原目标</span></div></div>
+    <div class="flow" style="margin-top:16px"><div class="node"><strong>继承同一边界</strong><span>lineage 指向 C 的截止位置<br>按需物化，不必全量拷贝</span></div><div class="arrow">→</div><div class="node highlight"><strong>新线程 T-B</strong><span>C → T3′ → T4′<br>开始独立演进</span></div></div>
+    <p class="diagram-caption">这是会话历史的隔离。若两线程仍使用同一目录，文件写入依旧互相可见。Git worktree 或独立执行环境需要另行建立。</p>
+  </div>
+  <h3>4.6 恢复时最容易漏掉的五类状态</h3>
+  <ol><li><strong>真实环境漂移：</strong>文件、分支、依赖或外部记录可能已改变。应重新读取当前状态，对旧测试结果保留版本标识。</li><li><strong>未完成调用：</strong>恢复看到已发起工具调用，却没有结果，不能直接认定未执行。读操作可重试，写操作应查业务操作 ID 或幂等结果。</li><li><strong>授权与来源：</strong>旧摘要里的“用户同意”可能缺少条件和范围；不能把 agent 自己的提议升级成授权事实。</li><li><strong>配置与能力：</strong>模型、工具 schema、凭据、MCP 可达性和权限可能变化。当前可执行能力必须重新解析；不应该把旧工具句柄当作新能力。</li><li><strong>活动资源：</strong>后台 shell、连接与内存队列的恢复能力取决于宿主服务。只有保存聊天记录，无法保证它们仍存活。</li></ol>
+  <h3>4.7 UI 历史、模型历史和诊断历史应分别建模</h3>
+  <p>UI 需要可读的消息、命令和文件变更；模型需要协议合法、预算受控的 items；调试需要请求、工具执行和事件的因果关联。三者强行共用一份“聊天字符串”，会出现重复消息、缺失调用关系、恢复后 phase 丢失、以及“工具执行了但模型没看到结果”等问题。</p>
+  <p>公开 rollout-trace 用原始事件和 payload 引用，再由 reducer 生成图，明确区分模型可见内容和 Runtime 对象。例如程序化工具调用可能执行多个嵌套工具，主模型只看见外层代码调用和主动输出的结果，不能从 UI 摘要反推模型读到了所有原始返回值。该 trace 需显式启用，不能与默认持久会话记录混同。<a class="ref" href="#c12">[C12]</a></p>
+  <div class="grid2"><div class="panel compare-good"><h4>这种架构的优势</h4><p>恢复可被检查点约束；完整证据可追溯；UI 可分页；fork 能保存分支语义；持久记录可重建查询投影。</p></div><div class="panel compare-risk"><h4>需要承担的代价</h4><p>格式迁移、双层存储一致性、祖先 lineage 生命周期、检查点兼容和损坏修复都较复杂。旧模型结论与新环境之间还存在语义一致性问题。</p></div></div>
+</section>
+
+<section class="chapter" id="memory">
+  <div class="chapter-no">05 / MEMORY WITH PROVENANCE</div>
+  <h2>长短期记忆：从工作状态，到可复用的历史证据</h2>
+  <p class="intro">“记住了”至少有三种含义：还在当前窗口里、可以从历史中查到、已经被提炼为跨会话记忆。它们的可靠性、成本和更新方式完全不同。</p>
+  <h3>5.1 用生命周期划分记忆</h3>
+  <div class="table-wrap"><table><thead><tr><th>类型</th><th>典型载体</th><th>适合保存</th><th>不宜依赖它保存</th></tr></thead><tbody>
+  <tr><td>短期 / 工作记忆</td><td>活动窗口、近期工具结果、当前计划与压缩状态</td><td>当前任务的目标、约束、发现和待办</td><td>无限期保留的所有日志、任意精确原文</td></tr>
+  <tr><td>情景记忆 / 任务历史</td><td>rollout、回合记录、每次任务摘要</td><td>做过什么、何时做、证据在哪、结果如何</td><td>不经筛选就作为全局长期规则</td></tr>
+  <tr><td>长期派生记忆</td><td>记忆摘要、索引、主题文件、检索工具</td><td>重复有用的决策、明确偏好、适用范围和证据入口</td><td>当前生产状态、临时授权、已经失效的工具结果</td></tr>
+  <tr><td>显式项目知识</td><td><code>AGENTS.md</code>、文档、技能、测试</td><td>团队可审阅的规范与可执行流程</td><td>未经确认的个人推断、隐含跨项目偏好</td></tr>
+  </tbody></table></div>
+  <p><strong>压缩解决“同一任务继续工作”，长期记忆解决“未来任务复用经验”。</strong>压缩窗口再大也不等于长期记忆；将完整历史保存到数据库，也不会自动变成有效检索。</p>
+  <h3>5.2 Codex 公开记忆管线：提取与整合分开</h3>
+  <p><span class="evidence verified">源码存在两阶段管线</span>：符合条件的根会话启动后，后台选择历史 rollout；Phase 1 对各任务提取结构化结果并写入状态存储，Phase 2 在全局锁下整合并更新记忆文件。它受 feature flag、会话类型、状态库、配额和配置限制，不能据此断言所有用户默认都启用。<a class="ref" href="#c9">[C9]</a></p>
+  <div class="diagram" role="img" aria-label="两阶段记忆管线：历史筛选、逐任务提取、全局整合、未来会话读取">
+    <div class="flow"><div class="node"><strong>筛选旧任务</strong><span>年龄、空闲时间、来源<br>批次上限、租约、重试退避</span></div><div class="arrow">→</div><div class="node"><strong>Phase 1 / 提取</strong><span>受控并行，模型提取<br>摘要、来源、可复用事实</span></div><div class="arrow">→</div><div class="node"><strong>Phase 2 / 整合</strong><span>全局锁、文件差异<br>整合 agent、验证与基线</span></div><div class="arrow">→</div><div class="node highlight"><strong>新会话读取</strong><span>注入精简摘要<br>按需检索更深证据</span></div></div>
+  </div>
+  <p><strong>为什么拆两阶段？</strong>逐任务提取可以并行，且不会互相修改同一知识文件；全局整合必须控制并发，否则多个进程会产生重复、互相覆盖和删除竞态。源码用任务 claim/lease、失败退避与全局整合锁管理这一过程，并通过工作区差异决定是否需要再次整合。</p>
+  <h3>5.3 版本差异：不能把 V1 布局当成永久架构</h3>
+  <div class="grid2"><div class="panel"><h4>V1：摘要 → 注册表 → 证据</h4><p>源码读提示使用 <code>memory_summary.md</code> 作为轻量入口，配合 <code>MEMORY.md</code>、<code>rollout_summaries/</code> 和技能目录逐步深入。Phase 1 可生成 <code>raw_memory</code> 与任务摘要，整合阶段组织更高层输出。</p></div><div class="panel"><h4>V2：更强调真实任务与人类证据</h4><p>当前快照同时存在 <code>memories_v2</code> 独立命名空间。V2 提取 schema 仅含任务摘要和 slug，提示强调用户原始请求、纠正、范围、时间顺序、未完成工作与证据，而不是把一次对话过度泛化成人格偏好。</p></div></div>
+  <p>读取扩展将精简摘要作为上下文片段注入；该快照的摘要预算为 <code>2,500</code> 近似 tokens。启用专用记忆工具时，还提供 list/search/read 等检索接口；否则可存在基于文件的读取路径。这里的数值是公开快照中的实现常量，不代表稳定产品承诺。没有证据说明这条本地路径必须使用向量数据库；文件搜索和分层索引本身就能构成记忆系统。<a class="ref" href="#c10">[C10]</a></p>
+  <div class="interactive" id="memory-explorer">
+    <div class="label">交互 04 / 按需记忆检索</div><h3>从轻量入口逐步回到原证据</h3>
+    <p class="small">以 V1 的文件层级演示。每深入一层，细节增加，读取成本也增加；只有当前问题需要时才继续。</p>
+    <div class="memory-steps" role="group" aria-label="选择记忆层级"><button data-memory="0" aria-pressed="true"><strong>摘要入口</strong><span>知道有哪些相关历史</span></button><button data-memory="1" aria-pressed="false"><strong>主题索引</strong><span>定位决策与适用范围</span></button><button data-memory="2" aria-pressed="false"><strong>任务摘要</strong><span>查看行动、证据、结局</span></button><button data-memory="3" aria-pressed="false"><strong>当前原始来源</strong><span>验证代码 / 记录是否变化</span></button></div>
+    <div class="readout" id="memory-detail" aria-live="polite" style="margin-top:20px"></div>
+  </div>
+  <h3>5.4 什么值得记，什么应该被遗忘？</h3>
+  <p><span class="evidence design">通用设计</span> 一条记忆至少应携带内容、来源、适用范围、生成时间、验证时间与不确定性。优先保存能改变未来行动的稳定信息；临时日志和一次性错误不应无限积累。对于“用户这次要求先给计划”，应记为当前任务条件；只有用户明确表达长期偏好时，才推广为跨任务偏好。</p>
+  <pre><code># 建议的数据形态，不是 Codex 的固定 schema
+content: 支付模块当前使用应用层幂等键
+scope: repository-X / services/payments
+source: rollout-T7 + commit abc123
+kind: observed_project_decision
+valid_at: 2026-10-20
+confidence: observed
+verification: 变更前读取当前 repository 实现
+supersedes: old-note-17
+status: active</code></pre>
+  <p>遗忘不只是 TTL 到期删除。需要区分“不再注入”“不再参与整合”“删除派生摘要”“删除原始证据与备份”。公开管线按使用时间和使用情况筛选整合输入，并存在清理与显式更正入口，但这些选择不应被解释为对所有历史数据的自动彻底删除保证。</p>
+  <h3>5.5 写入路径：显式纠正也应保留来源</h3>
+  <p>当前公开读取提示要求显式的 remember / forget / correction 写入小型 ad hoc note，由整合管线更新生成文件，而不是直接随手改生成记忆。后台自动提取与当前任务内显式记忆修改是两条不同路径。这样便于追踪“谁要求改变什么”，也减少手工修改下一次被生成器覆盖的问题。</p>
+  <p>记忆整合 agent 的能力也应受限：公开代码的托管权限路径将写入限制在记忆目录并关闭网络，且控制递归协作；父配置显式禁用托管沙箱或使用外部权限模式时，则走继承分支，不能把这个隔离范围视为无条件保证。把历史文本作为证据输入，而不是允许它决定工具权限，是隔离记忆污染的重要边界。<a class="ref" href="#c9">[C9]</a><a class="ref" href="#c10">[C10]</a></p>
+  <div class="grid2"><div class="panel compare-good"><h4>收益</h4><p>减少重复探索；保留项目决策；跨会话保持一致；精简入口降低启动成本；有出处的记忆可以复核。</p></div><div class="panel compare-risk"><h4>风险与成本</h4><p>过度概括、过期事实、跨项目串味、自我强化和提示注入；提取与整合消耗 token；需要更新、纠错、删除和访问控制。</p></div></div>
+  <div class="callout"><p><strong>最重要的原则：</strong>记忆是历史线索。当前指令决定任务，当前拥有者数据决定事实；有变动风险时应回到原始来源验证。</p></div>
+</section>
+
+<section class="chapter" id="mcp">
+  <div class="chapter-no">06 / TOOLS ACROSS A PROTOCOL BOUNDARY</div>
+  <h2>MCP：连接外部能力的协议，执行仍由 Harness 管理</h2>
+  <p class="intro">MCP 让宿主以统一协议发现和调用外部工具、读取资源。它不自动提供长期记忆，也不保证外部数据可信，更不替应用完成所有权限判断。</p>
+  <h3>6.1 三个角色与两类连接</h3>
+  <p><strong>Host</strong> 是 Codex 这类应用；它管理模型、用户授权和工具可见性。<strong>MCP Client</strong> 是宿主内部的协议连接组件；<strong>Server</strong> 提供工具与资源，并连接真正的业务系统。模型看到工具描述和参数 schema，输出调用意图，宿主将它转成 MCP 请求。</p>
+  <div class="grid2"><div class="panel"><h4>STDIO / 本地服务</h4><p>宿主启动服务进程，通过标准输入输出交换协议消息。适合本地文件、开发工具和私有适配器；需管理进程、环境变量、工作目录和生命周期。</p></div><div class="panel"><h4>Streamable HTTP / 远程服务</h4><p>Client 访问远程端点，处理网络、认证、会话和重连。Codex 文档支持配置 URL、认证与超时；OAuth 登录是宿主与服务之间的流程，不需要把凭据放进模型提示词。</p></div></div>
+  <p class="source-line">公开 Codex MCP 配置及实现。<a class="ref" href="#s8">[D8]</a><a class="ref" href="#c11">[C11]</a></p>
+  <div class="interactive" id="mcp-explorer">
+    <div class="label">交互 05 / MCP 生命周期</div><h3>从配置到一次实际工具调用</h3>
+    <div class="mcp-steps" role="group" aria-label="选择 MCP 阶段"><button data-mcp="0" aria-pressed="true">1 配置 / 认证</button><button data-mcp="1" aria-pressed="false">2 建立传输</button><button data-mcp="2" aria-pressed="false">3 初始化</button><button data-mcp="3" aria-pressed="false">4 发现 / 过滤</button><button data-mcp="4" aria-pressed="false">5 调用 / 审批</button><button data-mcp="5" aria-pressed="false">6 结果 / 更新</button></div>
+    <div class="readout" id="mcp-detail" aria-live="polite" style="margin-top:20px"></div>
+  </div>
+  <h3>6.2 公开连接管理器做了哪些工作？</h3>
+  <p>源码 <code>McpConnectionSet</code> 聚合连接，维护启动状态、服务元数据、工具与资源目录。它位于 <code>McpRuntime / McpBinding</code> 之后，包含连接身份比较、可复用 client、目录缓存和 revision 等机制。连接不必机械地按每个模型请求重新创建，也不能只以服务名字相同就假定可以复用。</p>
+  <p>模型可见工具列表还要经过配置与策略过滤。<code>enabled_tools</code>、<code>disabled_tools</code> 可以收窄能力；服务的 <code>required</code> 设置会影响初始化失败的处理。工具发现、工具对模型可见、工具当次可执行，是三个不同条件。目录缓存可能已有工具描述，但真正调用仍需要就绪的连接和有效权限。</p>
+  <h3>6.3 工具目录如何影响上下文？</h3>
+  <p>工具名、描述和 schema 也占输入预算。工具很多时，可以采用增量发布、目录搜索、按任务暴露能力，或程序化调用的工具发现层；公开快照存在增量工具上下文、目录缓存及 code-mode 等机制。不能假定每次请求都携带所有 MCP 工具，也不能假定模型看见一个名字就拥有完整 schema。</p>
+  <pre><code># 可配置的连接示意；不包含真实凭据
+[mcp_servers.knowledge]
+url = "https://mcp.example.invalid/mcp"
+startup_timeout_sec = 15
+tool_timeout_sec = 45
+enabled_tools = ["search", "read"]
+required = false
+
+# 认证在宿主凭据管理中处理。
+# 工具白名单之外，业务服务仍应检查用户与记录级权限。</code></pre>
+  <h3>6.4 一次写操作的信任链</h3>
+  <div class="flow diagram" role="img" aria-label="工具写操作经过模型提议、宿主检查、必要的人类授权、服务端业务鉴权后执行"><div class="node"><strong>模型提出动作</strong><span>选择工具和参数<br>只是意图</span></div><div class="arrow">→</div><div class="node"><strong>宿主策略</strong><span>参数校验、能力限制<br>必要的用户审批</span></div><div class="arrow">→</div><div class="node"><strong>MCP Server</strong><span>身份、业务权限<br>幂等与业务校验</span></div><div class="arrow">→</div><div class="node"><strong>执行与回执</strong><span>保存操作 ID 与结果<br>回填上下文</span></div></div>
+  <p>远程 MCP 的写入可能发生在远端业务系统。只给本地 shell 加沙箱，无法约束一个远程“删除工单”工具。因此权限需要贯穿宿主和服务端。服务返回的 <code>isError</code>、结构化内容、图片或资源引用，也需要宿主映射为模型可消费的结果；一次调用成功返回，并不必然表示业务目标已完成。</p>
+  <div class="grid2"><div class="panel compare-good"><h4>优点</h4><p>统一接入与工具发现；模型与业务适配解耦；可复用认证和服务；数据按需读取；具备较明确的协议边界。</p></div><div class="panel compare-risk"><h4>缺点与防线</h4><p>schema 膨胀、网络和认证失效、服务版本变化、恶意描述与返回内容、远端副作用。应隔离凭据、限制工具、保留来源，按风险设计幂等与审计。</p></div></div>
+</section>
+
+<section class="chapter" id="agents">
+  <div class="chapter-no">07 / COORDINATION WITHOUT A SHARED BRAIN</div>
+  <h2>子 Agent 与多 Agent：把上下文分开，再把结果汇合</h2>
+  <p class="intro">一个子 agent 是拥有独立执行循环和会话状态的工作者。多 agent 协作依靠任务、消息、状态和成果交换；各 agent 不共享同一个连续思维流。</p>
+  <h3>7.1 三种并行不要混淆</h3>
+  <div class="table-wrap"><table><thead><tr><th>方式</th><th>并行的对象</th><th>上下文</th><th>适合任务</th></tr></thead><tbody>
+  <tr><td>并行工具</td><td>多个独立工具执行</td><td>同一主 agent 继续消费结果</td><td>批量文件读取、独立 API 查询</td></tr>
+  <tr><td>程序化工具编排</td><td>模型生成代码，由工具 Runtime 组合多个调用</td><td>主模型可只接收显式输出的聚合结果</td><td>大量结构化数据处理、减少中间输出</td></tr>
+  <tr><td>多 Agent</td><td>多个模型上下文与执行循环</td><td>各自独立，通过消息和最终结果连接</td><td>独立调查、不同专长、可分离的实现与验证</td></tr>
+  </tbody></table></div>
+  <h3>7.2 子 Agent 如何获得上下文？</h3>
+  <p>常见策略有三种：<strong>继承当前历史快照</strong>，降低任务背景缺失；<strong>只传任务与必要背景</strong>，减少污染与成本；<strong>选择性继承</strong>，保留约束、关键消息和证据入口，过滤噪声。具体 API 名称、过滤规则和默认行为随运行版本变化。</p>
+  <p><span class="evidence verified">公开实现</span> 中，spawn 负责派生配置、解析父线程、处理权限与环境继承、准备历史和初始输入。代码存在按消息类型和 phase 过滤继承内容的路径，并移除旧的角色提示等片段，避免把“你是父 agent”错误带给子 agent。因此“继承完整历史”也需要按具体实现理解，不宜断言逐字继承所有工具、推理和运行句柄。<a class="ref" href="#c13">[C13]</a></p>
+  <div class="interactive" id="agent-explorer">
+    <div class="label">交互 06 / 协作拓扑与上下文边界</div><h3>点击一个 Agent，查看它需要知道什么</h3>
+    <div class="agent-tree" role="group" aria-label="选择协作节点"><button class="root" data-agent="root" aria-pressed="true"><strong>主 Agent / 协调与集成</strong><span>持有用户目标、约束、分工、验收和最终交付</span></button><div class="agent-connect">任务与范围 ↓　　摘要、证据与变更 ↑</div><button data-agent="research" aria-pressed="false"><strong>调查 Agent</strong><span>读取调用链，提供根因与位置</span></button><button data-agent="implement" aria-pressed="false"><strong>实现 Agent</strong><span>修改指定文件，报告 diff 与验证</span></button><button data-agent="verify" aria-pressed="false"><strong>验证 Agent</strong><span>在约定版本执行独立检查</span></button></div>
+    <div class="readout" id="agent-detail" aria-live="polite"></div>
+    <p class="small">这是参考工作流。验证若依赖实现结果，应等待明确的变更版本后再执行；图中的并列节点不表示所有任务都能同时开始。</p>
+  </div>
+  <h3>7.3 协作 Runtime 的核心组件</h3>
+  <ul><li><strong>生命周期：</strong>创建、运行、等待输入、完成、失败、中断和卸载；父线程不能把 spawn 成功误认为子任务完成。</li><li><strong>任务与消息：</strong>传递目标、资源范围、输出契约和修改约束。消息应带发送者、接收者、任务 ID、回复关系与状态。</li><li><strong>调度与预算：</strong>控制并发槽位、深度、等待超时和累计成本；需要防止递归拆分无限增长。</li><li><strong>邮箱与唤醒：</strong>运行中的 agent 在安全边界接收输入；空闲者可以被任务唤醒。源码中有卸载会话的待收邮箱，以及运行容量和状态监视组件。</li><li><strong>结果归并：</strong>父 agent 收集结论与证据，检查冲突、验证适用版本，再决定最终答复或集成修改。</li></ul>
+  <p class="source-line">公开源码可见 agent/control 的 spawn、mailbox、budget、watch 等模块，及 inter-agent 记录类型。官方文档讨论了通过独立上下文减少主线程噪声的价值。<a class="ref" href="#c13">[C13]</a><a class="ref" href="#s9">[D9]</a></p>
+  <h3>7.4 文件系统与授权不是天然隔离的</h3>
+  <p>独立上下文只隔离模型输入。若多个 agent 共享目录，同时编辑同一文件仍会冲突；即使文件不同，也可能修改同一接口或依赖。可选策略包括文件所有权、串行集成、独立 Git worktree、固定提交作为验证输入，以及明确的合并负责人。Worktree 隔离 Git 工作状态，但不等同于安全沙箱。</p>
+  <p>子 agent 的工具与权限由运行时配置派生，不能通过提示词自行升级。某个 agent 的“请帮我发送消息”也不等于人类用户授权了外部发送。协作消息与外部内容都应保留来源，禁止把总结中的推测变成新的权限事实。</p>
+  <h3>7.5 性能：更快的条件是什么？</h3>
+  <div class="formula">串行耗时 ≈ Σ 子任务耗时<br>理想并行耗时 ≈ max(独立子任务耗时) + 启动 + 协调 + 汇总 + 集成 + 依赖阶段</div>
+  <p>这只是分析模型。真实收益受共享配额、工具资源、依赖和冲突影响。继承大历史会复制逻辑输入成本；缓存有机会减少重复计算，但不会让多个 agent 免费。主线程 token 可能减少，整个任务总 token 却增加，应同时衡量总成本、延迟和完成质量。</p>
+  <div class="grid2"><div class="panel compare-good"><h4>值得采用</h4><p>可独立的只读探索；多个互补审查角度；证据范围不同的调查；按模块可隔离的实现；有明确产出和整合人的任务。</p></div><div class="panel compare-risk"><h4>容易得不偿失</h4><p>每一步都依赖上一结果；共享文件频繁改写；主任务太小；分工不清；所有 agent 重复搜索同一资料；用投票替代真实测试。</p></div></div>
+  <details><summary>一个可执行的委派契约</summary><pre><code># 通用模板
+目标: 找出重复写入的根因，提供可复现证据
+上下文: 用户要求保留公开 API；主线程已确认重试路径
+范围: services/payments；只读，不修改文件
+输入版本: commit abc123 + 指定 diff
+输出:
+  - 根因 / 假设，分别标明
+  - 证据文件与行号
+  - 最小复现或测试建议
+  - 不确定性和未调查范围
+完成条件: 有证据支持结论；没有结论时报告阻塞
+协调: 发现范围冲突先发消息，由主 Agent 决定</code></pre></details>
+</section>
+
+<section class="chapter" id="blueprint">
+  <div class="chapter-no">08 / BUILDING YOUR OWN HARNESS</div>
+  <h2>从可用闭环到可恢复系统：实现顺序与取舍</h2>
+  <p class="intro">如果要实现一个类似 Codex 的 harness，应先让状态边界清楚、工具结果可靠，再增加长上下文、长期记忆和多 agent。复杂功能会放大基础状态模型的问题。</p>
+  <h3>8.1 参考模块划分</h3>
+  <pre><code>Client / UI
+  └─ Thread &amp; Turn API
+       ├─ Session Manager         线程、回合、当前运行状态
+       ├─ Prompt Builder          规则、项目、环境与工具装配
+       ├─ Context Manager         活动窗口、预算、规范化、压缩
+       ├─ Model Adapter           流式 items、重试、usage
+       ├─ Tool Router             schema、策略、执行器、结果映射
+       │    ├─ Local Execution    shell / 文件 / 补丁 / 进程
+       │    └─ MCP Runtime        认证、连接、目录、调用
+       ├─ Durable Store           记录、检查点、查询投影、分叉
+       ├─ Memory Pipeline         提取、整合、检索、纠错
+       ├─ Agent Scheduler         子任务、邮箱、容量、等待
+       └─ Observability           trace、指标、因果关联、评测
+
+横切关注点：权限与来源 / 版本与迁移 / 幂等与取消 / 工作区一致性</code></pre>
+  <p class="small">这是从公开实现归纳的参考架构，不是其当前 crate 结构的逐项复刻。</p>
+  <h3>8.2 优先建立的实现不变量</h3>
+  <ul class="checklist"><li><strong>合法的模型历史：</strong>调用与结果能匹配；保留角色、phase、类型和多模态字段；裁剪不制造孤立协议项。</li><li><strong>明确的完成状态：</strong>模型流结束、工具执行完、回合完成、用户目标完成分别表达。</li><li><strong>可恢复边界：</strong>检查点足以重建模型窗口与必要宿主状态；后台安装不会覆盖新输入。</li><li><strong>可追溯记录：</strong>每个工具动作关联 thread / turn / call / execution ID，必要时连接业务操作 ID。</li><li><strong>工作区真实：</strong>聊天摘要中的结论与当前文件、提交和外部系统相互核对；回退对话不伪装成回退世界。</li><li><strong>权限单调受控：</strong>模型、记忆、外部内容与子 agent 消息不能自行升级权限。</li><li><strong>预算可解释：</strong>区分当前窗口、累计 usage、压缩开销、缓存命中和全体 agent 总消耗。</li></ul>
+  <h3>8.3 五个阶段的建设路线</h3>
+  <div class="table-wrap"><table><thead><tr><th>阶段</th><th>应实现</th><th>验收问题</th></tr></thead><tbody>
+  <tr><td>① 最小闭环</td><td>结构化 items、工具验证、流式输出、权限、取消与完成语义</td><td>工具报错后能否修复？能否区分进度和交付？</td></tr>
+  <tr><td>② 持久会话</td><td>规范记录、回放、当前配置、分页与查询投影</td><td>重启后能否正确继续？写入中断如何处理？</td></tr>
+  <tr><td>③ 上下文工程</td><td>来源处限流、预算检查、压缩检查点、检索和精度恢复</td><td>压缩后能否保留用户最后一次纠正与未完成事项？</td></tr>
+  <tr><td>④ 跨任务记忆</td><td>异步提取、整合锁、范围与出处、纠正与删除路径</td><td>是否误把单次要求推广为长期偏好？</td></tr>
+  <tr><td>⑤ 多 Agent</td><td>委派契约、邮箱、调度、隔离、集成与总成本评测</td><td>相比单 agent，是否更快或更准，且成本可接受？</td></tr>
+  </tbody></table></div>
+  <h3>8.4 关键方案的优缺点对照</h3>
+  <div class="table-wrap"><table><thead><tr><th>选择</th><th>收益</th><th>付出的代价</th><th>建议</th></tr></thead><tbody>
+  <tr><td>全历史每次重发</td><td>实现简单，早期调试直观</td><td>窗口与成本上升，噪声积累</td><td>仅作为早期原型；尽快引入预算和按需读取</td></tr>
+  <tr><td>追加记录 + 查询投影</td><td>证据与查询解耦，可回放和分页</td><td>一致性、迁移、修复较复杂</td><td>长会话系统值得采用；保留来源位置</td></tr>
+  <tr><td>文本摘要检查点</td><td>可读，可审计，provider 相对灵活</td><td>语义损失，需设计摘要与恢复协议</td><td>关键约束结构化，精确证据外置</td></tr>
+  <tr><td>模型原生压缩状态</td><td>模型服务提供续接表示</td><td>不透明、兼容依赖、难人工编辑</td><td>原样存取，按返回窗口协议处理</td></tr>
+  <tr><td>文件式长期记忆</td><td>透明、可搜索、容易审阅</td><td>大规模检索与并发管理需加强</td><td>先解决范围、出处和更新，再按规模选索引</td></tr>
+  <tr><td>向量 / 混合检索</td><td>能做语义召回，适合更大知识库</td><td>切分、嵌入更新、误召回和 ACL</td><td>为精确标识保留词法检索；别只依赖相似度</td></tr>
+  <tr><td>全背景派生子 Agent</td><td>背景充分，少解释一次</td><td>复制噪声、逻辑输入较大</td><td>复杂相关任务适用；仍需明确局部目标</td></tr>
+  <tr><td>精简背景派生子 Agent</td><td>上下文干净，范围明确</td><td>可能缺少隐含约束</td><td>提供必要约束与证据路径，允许补问</td></tr>
+  </tbody></table></div>
+  <h3>8.5 真正有价值的评测</h3>
+  <p>除了任务成功率，还应观察：<strong>压缩后约束保留率、恢复后下一步正确率、过期记忆误用率、工具重复副作用、取消延迟、历史读取延迟、总 token 与用户等待时间。</strong>不要只比较一次模型回答的质量。</p>
+  <div class="grid2"><div class="panel"><h4>上下文与恢复测试</h4><p>在压缩前后插入用户纠正；在检查点写入和投影更新之间中断；让一个工具调用完成但回执丢失；fork 后继续写父线程；更换模型窗口；恢复时更改工作区。检查它是否保持目标、边界和事实。</p></div><div class="panel"><h4>记忆与协作测试</h4><p>用“仅这次如此”测试范围；用新事实覆盖旧结论；让外部文档夹带指令；给子 agent 冲突信息；让两个 agent 修改同一接口；在共享限流下比较单 agent 与并行方案。</p></div></div>
+  <div class="callout"><p><strong>最终设计准则：</strong>让模型只承担必须依靠语义判断的部分；让 Runtime 明确执行状态转换；让证据保留在可访问的来源；让上下文成为有预算、可恢复、有来源的工作视图。</p></div>
+</section>
+
+<section class="chapter" id="sources">
+  <div class="chapter-no">09 / EVIDENCE &amp; CODE MAP</div>
+  <h2>来源、版本与继续阅读路径</h2>
+  <p class="intro">文档用于确认公开契约，源码用于解释具体实现。链接中的源码固定到本次阅读的提交；默认分支后续可能变化。</p>
+  <p>核对日期：<strong>2026-10-26</strong>。公开源码：<code>970111f6cb62cc02fe36a82ea7d71b37a2889c97</code>，提交于 <code>2026-10-23T18:50:54Z</code>。文中的演示只模拟信息流，没有连接真实模型、MCP 或用户会话，也没有读取用户私有历史。</p>
+  <h3>官方文档</h3>
+  <ul class="source-list">
+    <li id="s1"><b>D1</b><a href="https://developers.openai.com/blog/codex-as-a-platform" target="_blank" rel="noopener noreferrer">Codex as a platform: build on the open agent harness</a><small>支持 harness 的整体定位，以及 app-server、应用上下文与工具之间的分工。</small></li>
+    <li id="s2"><b>D2</b><a href="https://learn.chatgpt.com/docs/app-server" target="_blank" rel="noopener noreferrer">Codex App Server</a><small>Thread / Turn / Item，初始化、流式事件、分页历史、resume、fork、revert 和 compaction 接口。版本敏感，接入时应使用对应 schema。</small></li>
+    <li id="s3"><b>D3</b><a href="https://learn.chatgpt.com/docs/agent-configuration/agents-md" target="_blank" rel="noopener noreferrer">Custom instructions with AGENTS.md</a><small>全局与项目目录的指令发现、override 优先级和预算。</small></li>
+    <li id="s4"><b>D4</b><a href="https://developers.openai.com/cookbook/examples/gpt-5/codex_prompting_guide" target="_blank" rel="noopener noreferrer">Codex Prompting Guide</a><small>公开模板与工具设计的参考，及恢复历史时保留 assistant phase 的要求。它不是所有线上部署的完整提示词。</small></li>
+    <li id="s5"><b>D5</b><a href="https://learn.chatgpt.com/docs/config-file/config-reference" target="_blank" rel="noopener noreferrer">Configuration Reference</a><small>模型窗口、自动压缩阈值与计量范围、工具输出预算、记忆和历史设置。</small></li>
+    <li id="s6"><b>D6</b><a href="https://developers.openai.com/api/docs/guides/compaction" target="_blank" rel="noopener noreferrer">Responses API — Compaction</a><small>服务端与独立压缩、不透明加密项、返回窗口的续接规则。API 行为不等于所有客户端内部实现。</small></li>
+    <li id="s7"><b>D7</b><a href="https://developers.openai.com/api/docs/guides/prompt-caching" target="_blank" rel="noopener noreferrer">Prompt caching</a><small>可复用前缀与缓存行为；缓存不构成额外长期记忆。</small></li>
+    <li id="s8"><b>D8</b><a href="https://learn.chatgpt.com/docs/extend/mcp?surface=cli" target="_blank" rel="noopener noreferrer">Model Context Protocol</a><small>STDIO、Streamable HTTP、认证、required、白名单和超时等 Codex MCP 配置。</small></li>
+    <li id="s9"><b>D9</b><a href="https://learn.chatgpt.com/docs/agent-configuration/subagents" target="_blank" rel="noopener noreferrer">Subagents</a><small>独立上下文、协作收益、总 token 成本，以及并发写入的协调问题。</small></li>
+  </ul>
+  <h3>公开源码导航</h3>
+  <p class="small">以下模块位置以固定快照为准。部分 README 保留了旧目录说明，因此具体类型、实现文件和测试优先于过时的路径描述。</p>
+  <ul class="source-list">
+    <li id="c1"><b>C1</b><a data-code-path="codex-rs/prompts/src/model_instructions.rs">基础提示词渲染</a> · <a data-code-path="codex-rs/prompts/src/model_messages.rs">模型消息解析</a><small>从捕获的模型元数据读取模板；提示片段具有独立职责。</small></li>
+    <li id="c2"><b>C2</b><a data-code-path="codex-rs/core/src/session/turn.rs">回合执行循环</a> · <a data-code-path="codex-rs/core/src/thread_manager.rs">线程管理</a><small>采样、继续条件、待处理输入、工具构建、自动压缩与线程生命周期。</small></li>
+    <li id="c3"><b>C3</b><a data-code-path="codex-rs/core/src/context_manager/history.rs">ContextManager</a> · <a data-code-path="codex-rs/core/src/context_manager/normalize.rs">历史规范化</a><small>活动 items、保留上下文、历史修订、token 信息、工具调用结果配对和模态处理。</small></li>
+    <li id="c4"><b>C4</b><a data-code-path="codex-rs/core/src/compact.rs">文本压缩路径</a> · <a data-code-path="codex-rs/core/src/compact_remote_v2.rs">远端压缩</a> · <a data-code-path="codex-rs/core/src/compact_remote_v2_installation.rs">检查点安装</a> · <a data-code-path="codex-rs/core/src/session/async_compaction.rs">后台压缩</a><small>摘要、候选与安装路径；不同分支由配置、模型与 feature flags 决定。</small></li>
+    <li id="c5"><b>C5</b><a data-code-path="codex-rs/message-history/src/lib.rs">全局输入历史</a><small>history.jsonl 的字段和写入行为；与完整 rollout 分开。</small></li>
+    <li id="c6"><b>C6</b><a data-code-path="codex-rs/rollout/src/recorder.rs">RolloutRecorder</a> · <a data-code-path="codex-rs/history/src/lib.rs">RolloutItem / CompactedItem</a> · <a data-code-path="codex-rs/thread-store/src/local/thread_history_materialization.rs">SQLite 历史物化</a><small>规范会话记录、检查点恢复元数据、偏移与批次化投影。</small></li>
+    <li id="c7"><b>C7</b><a data-code-path="codex-rs/rollout/src/model_context.rs">ModelContextScan</a> · <a data-code-path="codex-rs/thread-store/src/local/model_context.rs">模型上下文读取</a> · <a data-code-path="codex-rs/history/src/compaction_resume_metadata.rs">压缩恢复信息</a><small>从最近完整检查点逆向限定读取；旧格式兼容与 lineage 恢复。</small></li>
+    <li id="c8"><b>C8</b><a data-code-path="codex-rs/thread-store/src/local/paginated_fork.rs">分页历史分叉</a> · <a data-code-path="codex-rs/thread-store/src/local/rollout_lineage.rs">Rollout lineage</a> · <a data-code-path="codex-rs/thread-store/src/local/revert_thread.rs">历史修订</a><small>冻结序号 / 字节边界、继承前缀、保持线程身份的新 rollout。</small></li>
+    <li id="c9"><b>C9</b><a data-code-path="codex-rs/memories/write/src/start.rs">记忆启动管线</a> · <a data-code-path="codex-rs/memories/write/src/phase1.rs">Phase 1</a> · <a data-code-path="codex-rs/memories/write/src/phase2.rs">Phase 2</a> · <a data-code-path="codex-rs/memories/write/templates/memories/stage_one_system_v2.md">V2 提取模板</a><small>受条件控制的异步提取、版本命名空间、任务 claim、整合与验证。</small></li>
+    <li id="c10"><b>C10</b><a data-code-path="codex-rs/ext/memories/src/extension.rs">记忆读取扩展</a> · <a data-code-path="codex-rs/ext/memories/src/prompts.rs">摘要注入预算</a> · <a data-code-path="codex-rs/ext/memories/templates/memories/read_path.md">V1 读取模板</a> · <a data-code-path="codex-rs/ext/memories/templates/memories/read_path_v2.md">V2 读取模板</a> · <a data-code-path="codex-rs/protocol/src/memory_version.rs">版本目录</a><small>摘要与深层检索、V1 / V2 路径、显式更正 note 与来源要求。</small></li>
+    <li id="c11"><b>C11</b><a data-code-path="codex-rs/codex-mcp/src/connection_manager.rs">MCP 连接管理</a> · <a data-code-path="codex-rs/codex-mcp/src/connection_manager/tool_catalog.rs">工具目录</a> · <a data-code-path="codex-rs/rmcp-client/src/lib.rs">RMCP Client</a><small>连接复用、启动、目录与 revision、资源聚合及底层协议客户端。</small></li>
+    <li id="c12"><b>C12</b><a data-code-path="codex-rs/rollout-trace/README.md">Rollout Trace</a> · <a data-code-path="codex-rs/code-mode-protocol/src/description.rs">Code Mode 工具契约</a> · <a data-code-path="codex-rs/code-mode/src/remote_session.rs">Code Mode 会话</a> · <a data-code-path="codex-rs/code-mode-host/src/lib.rs">代码执行宿主</a><small>区分模型可见 items、代码单元、工具执行与进程；诊断 Trace 为显式启用路径。</small></li>
+    <li id="c13"><b>C13</b><a data-code-path="codex-rs/core/src/agent/control/spawn.rs">子 Agent 创建与历史派生</a> · <a data-code-path="codex-rs/core/src/agent/control/mailbox.rs">待收邮箱</a> · <a data-code-path="codex-rs/core/src/agent/control/budget.rs">预算与容量</a> · <a data-code-path="codex-rs/core/src/agent/control/watch.rs">状态观察</a><small>任务与上下文传递、生命周期、并发控制与协作状态。</small></li>
+  </ul>
+  <h3>推荐源码阅读顺序</h3>
+  <div class="reading-path"><a href="#c2">回合循环</a><span>→</span><a href="#c3">活动上下文</a><span>→</span><a href="#c6">持久账本</a><span>→</span><a href="#c7">冷恢复</a><span>→</span><a href="#c4">压缩安装</a><span>→</span><a href="#c9">记忆</a><span>→</span><a href="#c11">MCP</a><span>→</span><a href="#c13">协作</a></div>
+  <div class="footer">这份报告区分源码事实与架构建议。示意图是信息流抽象，预算比例为教学假设；未对不同模型或 harness 做性能实测。页面可离线使用，外部来源链接需联网打开。<br><a href="#top">返回开头 ↑</a></div>
+</section>
+</main>
+<noscript><p style="padding:30px">正文与图表可以直接阅读。预算、回放和其他交互演示需要启用 JavaScript。</p></noscript>
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  var byId = function (id) { return document.getElementById(id); };
+  var commit = '970111f6cb62cc02fe36a82ea7d71b37a2889c97';
+  document.querySelectorAll('[data-code-path]').forEach(function (a) {
+    a.href = 'https://github.com/openai/codex/blob/' + commit + '/' + a.dataset.codePath;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+  });
+  try {
+    var savedTheme = localStorage.getItem('harness-report-theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') root.dataset.theme = savedTheme;
+  } catch (e) { /* Local file storage can be unavailable. */ }
+  byId('theme-toggle').addEventListener('click', function () {
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light';
+    try { localStorage.setItem('harness-report-theme', root.dataset.theme); } catch (e) {}
+  });
+  byId('print-button').addEventListener('click', function () { window.print(); });
+  var openedForPrint = [];
+  window.addEventListener('beforeprint', function () {
+    openedForPrint = Array.from(document.querySelectorAll('details:not([open])'));
+    openedForPrint.forEach(function (d) { d.open = true; });
+  });
+  window.addEventListener('afterprint', function () {
+    openedForPrint.forEach(function (d) { d.open = false; });
+  });
+  byId('mobile-nav').addEventListener('change', function (e) { location.hash = e.target.value; });
+  var chapters = Array.from(document.querySelectorAll('.chapter'));
+  var navLinks = Array.from(document.querySelectorAll('.sidebar nav a'));
+  var scrollQueued = false;
+  function updateNavigation() {
+    scrollQueued = false;
+    var top = window.scrollY;
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    byId('progress-line').style.width = Math.max(0, Math.min(100, max > 0 ? top / max * 100 : 0)) + '%';
+    var activeId = '';
+    chapters.forEach(function (section) {
+      if (section.offsetTop <= top + 170) activeId = section.id;
+    });
+    navLinks.forEach(function (a) {
+      var active = a.getAttribute('href') === '#' + activeId;
+      a.classList.toggle('active', active);
+      if (active) a.setAttribute('aria-current', 'location');
+      else a.removeAttribute('aria-current');
+    });
+  }
+  window.addEventListener('scroll', function () {
+    if (!scrollQueued) { scrollQueued = true; requestAnimationFrame(updateNavigation); }
+  }, { passive: true });
+  window.addEventListener('resize', updateNavigation);
+  updateNavigation();
+  function choose(selector, key, value) {
+    document.querySelectorAll(selector).forEach(function (b) {
+      var active = b.dataset[key] === String(value);
+      b.setAttribute('aria-pressed', String(active));
+      b.classList.toggle('active', active);
+    });
+  }
+  var prompts = {
+    base: ['基础与产品约定', '角色、协作方式、持续推进、完成标准和答复形式。适合保持稳定并形成可复用前缀。公开 harness 的模板只是完整指令装配的一部分。', '适合：完成条件、何时继续、进度与最终答案的区别。风险：堆积过多重复规则，让当前任务被淹没。'],
+    policy: ['权限与工具协议', '提示词解释允许的工作方式，工具定义提供结构化调用契约；真正的执行权限由宿主、沙箱和服务端共同检查。', '工具参数要校验；call ID 与结果要配对；凭据留在宿主。“永不询问审批”不等于取消所有权限限制。'],
+    project: ['项目规则与技能', '按目录和作用域选择项目规则；技能先提供名称和适用条件，在需要时读取详细流程。它们将稳定的项目知识外置，减少每次用户重复说明。', '注意规则来源、目录优先级和字节预算。技能内容不是天然可信的无限授权，也不代表全目录都需要注入。'],
+    task: ['当前任务与环境', '用户目标、约束、当前目录、模式、选中文件和最新纠正。动态信息应有清楚边界，并保留原始用户来源。', '新指令应在下一次可处理的边界进入执行循环。压缩后不能丢掉后来纠正，也不能因旧计划覆盖用户新目标。'],
+    data: ['外部证据与工具返回', '文件、网页、日志、MCP 结果和子 agent 结论都属于带来源的证据。按任务选择相关片段，保留原始位置和时效。', '数据里出现“忽略上文”“已经获得授权”等字句，不会因此变成高优先级指令。由主 agent 核对事实，宿主检查权限。']
+  };
+  function showPrompt(key) {
+    choose('[data-prompt]', 'prompt', key);
+    var p = prompts[key];
+    byId('prompt-detail').innerHTML = '<h4>' + p[0] + '</h4><p>' + p[1] + '</p><p class="small">' + p[2] + '</p>';
+  }
+  document.querySelectorAll('[data-prompt]').forEach(function (b) {
+    b.addEventListener('click', function () { showPrompt(b.dataset.prompt); });
+  });
+  showPrompt('base');
+
+  function formatK(value) { return (Math.round(value * 10) / 10).toLocaleString('zh-CN') + 'k'; }
+  function renderBudget() {
+    var history = Number(byId('history-range').value);
+    var tools = Number(byId('tools-range').value);
+    var compacted = byId('budget-compact').checked;
+    var effectiveHistory = compacted ? history * 0.25 : history;
+    var input = 12 + effectiveHistory + tools + 4;
+    var free = 128 - input - 16;
+    var status = input > 128 ? '超出硬上限' : free < 0 ? '预留不足' : input >= 96 ? '达到压缩线' : '可继续';
+    var stateColor = free < 0 ? 'var(--red)' : input >= 96 ? 'var(--amber)' : 'var(--teal)';
+    byId('history-out').textContent = formatK(history);
+    byId('tools-out').textContent = formatK(tools);
+    byId('input-total').textContent = formatK(input);
+    byId('budget-free').textContent = formatK(free);
+    byId('budget-free').style.color = free < 0 ? 'var(--red)' : 'var(--teal)';
+    byId('budget-state').textContent = status;
+    byId('budget-state').style.color = stateColor;
+    var segments = [
+      ['规则', 12, '#90baf3'],
+      ['历史', effectiveHistory, '#78dac8'],
+      ['工具', tools, '#f1c27a'],
+      ['新输入', 4, '#b99be0'],
+      ['预留', 16, '#9ba8b5']
+    ];
+    var scale = Math.max(128, input + 16);
+    byId('budget-bar').innerHTML = segments.map(function (s) {
+      return '<div style="width:' + (s[1] / scale * 100).toFixed(4) + '%;background:' + s[2] + '" title="' + s[0] + ' ' + formatK(s[1]) + '">' + (s[1] >= 10 ? formatK(s[1]) : '') + '</div>';
+    }).join('');
+    byId('budget-bar').setAttribute('aria-label', '规则12k，历史' + formatK(effectiveHistory) + '，工具' + formatK(tools) + '，新输入4k，预留16k；' + status);
+    var text = free < 0
+      ? '输入加预留已超过假设上限。应减少来源输出、按需检索或压缩；不能只要求模型继续。图形按总需求比例展示，超出量以文本为准。'
+      : input >= 96
+      ? '仍能放入窗口，但已经达到假设触发线。提前压缩是为了给后续工具和模型生成留余量。'
+      : '当前仍有工作余量。先减少不相关工具输出，通常比等窗口快满时再处理更可控。';
+    if (compacted) text += ' 此处把可压缩历史缩至25%；真实压缩比例并不固定，也不是无损。工具输出没有自动被压缩。';
+    byId('budget-detail').innerHTML = '<h4>' + status + '</h4><p>' + text + '</p>';
+  }
+  ['history-range', 'tools-range', 'budget-compact'].forEach(function (id) {
+    byId(id).addEventListener('input', renderBudget);
+    byId(id).addEventListener('change', renderBudget);
+  });
+  renderBudget();
+
+  var historyEvents = ['会话元数据', 'T1 用户输入', 'T1 调用+结果', 'T2 输入与结果', '压缩检查点 C', 'T3 用户输入', 'T3 调用+结果'];
+  function token(text, state) { return '<span class="token ' + state + '">' + text + '</span>'; }
+  var historyNotes = [
+    ['创建线程', '建立会话元数据与执行配置。模型请求前还会装配当前基础指令、工具和环境。此时没有旧任务历史。'],
+    ['T1 开始', '用户输入加入模型窗口。持久账本与活动窗口暂时较接近，但它们仍然是不同视图。'],
+    ['工具结果回填', '调用和结果作为配对的协议项进入后续请求。UI 可以把它们展示成一条可展开的命令记录。'],
+    ['历史累积', 'T1、T2 的工作仍在活动窗口；更多日志会占据预算，目标与关键约束可能被噪声淹没。'],
+    ['安装检查点 C', '教学假设：C 将旧任务状态整理成更小窗口。原始 T1/T2 仍保存在账本；模型改用 C。真实检查点可能同时保留部分原始项。'],
+    ['压缩后继续', '活动窗口使用 C 加 T3 新输入；不需要重新把 T1/T2 的全部明文送入模型。'],
+    ['压缩后的后缀增长', 'C 后又加入工具调用与结果。当前恢复所需的核心输入，已经可以由 C 加后缀表示。'],
+    ['进程退出', '持久账本仍在，但进程内活动状态已退出。shell 句柄、连接和在途执行是否存活，由各宿主服务决定。'],
+    ['冷恢复：C + 后缀', '新版 paginated 路径逆向扫描最近完整检查点，再按时间顺序重建 C 和 T3 后缀，结合当前规则与配置继续。完整 UI 历史可另行分页读取。']
+  ];
+  function showHistory(step, fork) {
+    choose('[data-history]', 'history', fork ? -1 : step);
+    var count = Math.min(7, step + 1);
+    var stored = historyEvents.slice(0, count).map(function (s) { return token(s, 'on'); }).join('');
+    if (fork) stored += token('新线程元数据 / 冻结前缀', 'on');
+    byId('stored-tokens').innerHTML = stored;
+    var active = [token('当前规则 / 能力', 'on')];
+    if (fork) {
+      active.push(token('压缩检查点 C', 'on'), token('新分支任务', 'on'));
+    } else if (step === 7) {
+      active = [token('Runtime 已退出 / 尚未重建', 'off')];
+    } else if (step < 4) {
+      historyEvents.slice(1, count).forEach(function (s) { active.push(token(s, 'on')); });
+    } else {
+      historyEvents.slice(4, count).forEach(function (s) { active.push(token(s, 'on')); });
+    }
+    byId('active-tokens').innerHTML = active.join('');
+    var note = fork ? ['从 C 分叉', '子线程获得冻结到 C 的历史边界，并开始自己的后缀；父线程之后的 T3 不进入该分叉。这里没有复制或回退任何文件，文件系统是否隔离需要单独处理。'] : historyNotes[step];
+    byId('history-detail').innerHTML = '<h4>' + note[0] + '</h4><p>' + note[1] + '</p>';
+  }
+  document.querySelectorAll('[data-history]').forEach(function (b) {
+    b.addEventListener('click', function () { showHistory(Number(b.dataset.history), false); });
+  });
+  byId('fork-demo').addEventListener('click', function () { showHistory(4, true); });
+  byId('resume-demo').addEventListener('click', function () { showHistory(8, false); });
+  showHistory(8, false);
+
+  var memoryContent = [
+    ['摘要：判断是否相关', '例如：“支付模块曾处理过重试重复写入；存在一条用户要求保留 API 的历史记录。”这层提供路标，不应凭它宣布当前代码仍有相同问题。', '收益：启动便宜。局限：细节与适用条件有限。'],
+    ['主题索引：找到范围和入口', '在主题注册表中找到模块、决策、来源任务和相关文件。只有索引表明与当前目标有关，才继续读取任务证据。V2 的具体组织可以不同。', '收益：减少全历史扫描。局限：索引可能漏项或过期。'],
+    ['任务摘要：恢复发生过什么', '查看当时的请求、约束、调查、修改、验证和未完成工作。区分用户明确要求与 agent 推测，保留提交、文件、讨论或文档位置。', '收益：有时间和出处。局限：仍是派生记录，可能遗漏原始细节。'],
+    ['当前来源：验证是否仍然成立', '打开当前分支的实现或业务记录，核对版本与状态。历史记忆帮助选择调查路线，当前拥有者数据决定具体事实。', '收益：精确且可验证。成本：需要工具调用，且可能有权限和延迟。']
+  ];
+  function showMemory(index) {
+    choose('[data-memory]', 'memory', index);
+    var d = memoryContent[index];
+    byId('memory-detail').innerHTML = '<h4>' + d[0] + '</h4><p>' + d[1] + '</p><p class="small">' + d[2] + '</p>';
+  }
+  document.querySelectorAll('[data-memory]').forEach(function (b) {
+    b.addEventListener('click', function () { showMemory(Number(b.dataset.memory)); });
+  });
+  showMemory(0);
+
+  var mcpContent = [
+    ['配置与认证', '宿主解析服务地址或启动命令、白名单、超时与认证方式。令牌和 OAuth 凭据由宿主管理；模型无需读到凭据本身。', '失败边界：服务未配置、身份无效、授权范围不足。'],
+    ['建立传输', 'STDIO 启动并管理本地服务进程；HTTP Client 连接远程端点。连接身份和配置兼容时可以复用，而不是每个模型请求都重连。', '失败边界：进程退出、网络断连、TLS、连接配置变化。'],
+    ['初始化与能力协商', '通过 MCP 初始化交换协议版本与能力，并完成初始化通知。之后只使用服务实际支持的能力。模型推理本身不会代替这一步协议握手。', '失败边界：协议不兼容、初始化超时；required 服务失败会影响线程启动。'],
+    ['发现、聚合与过滤', '读取 tools/list；按能力需要读取资源或其他目录。宿主聚合服务能力、处理命名、缓存 revision，再按配置与策略过滤模型可见工具。', '边界：目录中存在一个工具，不代表它当前连接就绪或已获写入授权。'],
+    ['工具调用与策略检查', '模型生成参数，宿主验证并在需要时取得授权，再由 Client 发起 tools/call。服务端继续检查业务 ACL、参数与幂等性。', '边界：不能由外部返回文本自行决定新增授权。调用超时也不证明业务未执行。'],
+    ['结果映射与目录更新', '宿主处理文本、结构化内容、图片、资源引用与错误状态，裁剪过大输出并回填上下文。能力变更时刷新目录，重连时核对会话状态。', '边界：返回消息成功、工具成功、业务目标完成，需要分别判断。']
+  ];
+  function showMcp(index) {
+    choose('[data-mcp]', 'mcp', index);
+    var d = mcpContent[index];
+    byId('mcp-detail').innerHTML = '<h4>' + d[0] + '</h4><p>' + d[1] + '</p><p class="small">' + d[2] + '</p>';
+  }
+  document.querySelectorAll('[data-mcp]').forEach(function (b) {
+    b.addEventListener('click', function () { showMcp(Number(b.dataset.mcp)); });
+  });
+  showMcp(0);
+
+  var agentContent = {
+    root: ['主 Agent：保存全局任务语义', '知道用户目标、约束、已授权范围、各子任务依赖和当前成果。对子 agent 返回的结论进行比对与集成，承担最终验证和交付责任。', '输入：用户与全局状态。输出：任务契约、集成决策、最终成果。'],
+    research: ['调查 Agent：隔离探索噪声', '只需要问题背景、相关模块、已有发现和禁止修改的范围。它可以在独立上下文中阅读大量日志，返回证据位置、根因与不确定性。', '独立发现可以并行；父线程不必接收全部原始日志。'],
+    implement: ['实现 Agent：明确文件所有权', '需要经过确认的需求、接口边界、输入版本、可改文件、验收标准。与其他 agent 的写入冲突应交由协调者处理。', '输出：修改位置、diff、验证证据与尚未解决的问题。独立上下文不隔离共享目录。'],
+    verify: ['验证 Agent：固定被验证的版本', '需要准确的提交或变更快照、验收标准、测试命令和环境。若实现还在变化，应该先等依赖完成，而不是验证一个不明确的中间状态。', '输出：检查过什么、哪个版本、结果与日志位置。独立意见不能替代可复现测试。']
+  };
+  function showAgent(key) {
+    choose('[data-agent]', 'agent', key);
+    var d = agentContent[key];
+    byId('agent-detail').innerHTML = '<h4>' + d[0] + '</h4><p>' + d[1] + '</p><p class="small">' + d[2] + '</p>';
+  }
+  document.querySelectorAll('[data-agent]').forEach(function (b) {
+    b.addEventListener('click', function () { showAgent(b.dataset.agent); });
+  });
+  showAgent('root');
+}());
+</script>
+</body>
+</html>

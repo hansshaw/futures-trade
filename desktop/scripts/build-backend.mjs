@@ -1,0 +1,10 @@
+import { spawnSync } from 'node:child_process';
+import { mkdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const root = fileURLToPath(new URL('../../', import.meta.url));
+mkdirSync(path.join(root, 'bin'), { recursive: true });
+const output = path.join(root, 'bin', process.platform === 'win32' ? 'cornwatch.exe' : 'cornwatch');
+const result = spawnSync('go', ['build', '-trimpath', '-o', output, './cmd/cornwatch'], { cwd: path.join(root, 'backend'), stdio: 'inherit' });
+if (result.error) console.error(result.error.message);
+process.exit(result.status ?? 1);
