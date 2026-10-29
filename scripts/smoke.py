@@ -153,6 +153,7 @@ def research_checks(base, config):
 def start(folder):
     env = {k: v for k, v in os.environ.items() if not k.startswith("LLM_") and not k.startswith("CORNWATCH_")}
     env["CORNWATCH_TOKEN"] = TOKEN
+    env["CORNWATCH_AUTO_SYNC"] = "false"
     binary = ROOT / "bin" / ("cornwatch.exe" if os.name == "nt" else "cornwatch")
     process = subprocess.Popen([str(binary), "--addr", "127.0.0.1:0", "--data", str(Path(folder) / "test.db"), "--ui", str(ROOT / "desktop/dist")], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     line = process.stdout.readline()

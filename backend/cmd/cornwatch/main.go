@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"cornwatch/internal/analysis"
+	"cornwatch/internal/datahub"
 	"cornwatch/internal/journal"
 	"cornwatch/internal/server"
 	"cornwatch/internal/store"
@@ -66,7 +67,11 @@ func main() {
 			log.Fatal("CORNWATCH_POLL_INTERVAL must be a duration >=1m")
 		}
 	}
-	app := server.New(s, a, server.Config{Token: token, UI: *ui, AllowedOrigin: os.Getenv("CORNWATCH_ALLOWED_ORIGIN"), FeedURLs: feeds, WeatherEnabled: os.Getenv("CORNWATCH_WEATHER_ENABLED") == "true", PollInterval: interval, Journal: j})
+	hub, err := datahub.New(s)
+	if err != nil {
+		log.Fatal(err)
+	}
+	app := server.New(s, a, server.Config{Token: token, UI: *ui, AllowedOrigin: os.Getenv("CORNWATCH_ALLOWED_ORIGIN"), FeedURLs: feeds, WeatherEnabled: os.Getenv("CORNWATCH_WEATHER_ENABLED") == "true", PollInterval: interval, Journal: j, Hub: hub})
 	listener, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatal(err)

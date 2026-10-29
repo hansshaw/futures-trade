@@ -22,8 +22,10 @@ import (
 
 	"cornwatch/internal/analysis"
 	"cornwatch/internal/collector"
+	"cornwatch/internal/datahub"
 	"cornwatch/internal/domain"
 	"cornwatch/internal/journal"
+	"cornwatch/internal/marketdaily"
 	"cornwatch/internal/quant"
 	"cornwatch/internal/store"
 )
@@ -34,28 +36,40 @@ type Config struct {
 	WeatherEnabled           bool
 	PollInterval             time.Duration
 	Journal                  *journal.Service
+	Hub                      *datahub.Hub
 }
 type Server struct {
-	Store      *store.Store
-	Analyzer   *analysis.Analyzer
-	Collector  *collector.Collector
-	Config     Config
-	mu         sync.Mutex
-	subs       map[chan string]struct{}
-	collecting map[string]bool
-	backtests  chan struct{}
+	DailyFetcher DailyFetcher
+	current      chan struct{}
+	Store        *store.Store
+	Analyzer     *analysis.Analyzer
+	Collector    *collector.Collector
+	Config       Config
+	mu           sync.Mutex
+	subs         map[chan string]struct{}
+	collecting   map[string]bool
+	backtests    chan struct{}
 }
 
 func New(s *store.Store, a *analysis.Analyzer, c Config) *Server {
-	return &Server{Store: s, Analyzer: a, Collector: collector.New(), Config: c, subs: map[chan string]struct{}{}, collecting: map[string]bool{}, backtests: make(chan struct{}, 2)}
+	server := &Server{DailyFetcher: marketdaily.New().Fetch, current: make(chan struct{}, 1), Store: s, Analyzer: a, Collector: collector.New(), Config: c, subs: map[chan string]struct{}{}, collecting: map[string]bool{}, backtests: make(chan struct{}, 2)}
+	if c.Hub != nil {
+		c.Hub.SetNotify(server.changed)
+	}
+	return server
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	if s.Config.Hub != nil {
+		s.Config.Hub.Register(mux)
+	}
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		write(w, 200, map[string]any{"status": "ok", "version": "0.2.0", "mode": "research", "live_trading": false})
+		write(w, 200, map[string]any{"status": "ok", "version": "0.4.0", "mode": "research", "live_trading": false})
 	})
 	mux.HandleFunc("GET /api/research/market", s.marketResearch)
+	mux.HandleFunc("GET /api/research/current", s.getCurrentAnalysis)
+	mux.HandleFunc("POST /api/research/current", s.refreshCurrentAnalysis)
 	mux.HandleFunc("POST /api/research/risk", s.riskResearch)
 	mux.HandleFunc("POST /api/research/validate", s.validateResearch)
 	if s.Config.Journal != nil {
@@ -77,7 +91,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/sources", func(w http.ResponseWriter, r *http.Request) { write(w, 200, s.sources()) })
 	mux.HandleFunc("GET /api/settings", func(w http.ResponseWriter, r *http.Request) {
 		vision := s.Config.Journal != nil && s.Config.Journal.VisionEnabled()
-		write(w, 200, map[string]any{"llm": map[string]any{"configured": s.Analyzer.Configured(), "base_url": s.Analyzer.Config.BaseURL, "model": s.Analyzer.Config.Model}, "journal": map[string]any{"available": s.Config.Journal != nil, "vision_enabled": vision}, "feed_count": len(s.Config.FeedURLs), "weather_enabled": s.Config.WeatherEnabled, "storage": "bbolt / transaction / local", "live_trading": false})
+		weatherEnabled := s.Config.WeatherEnabled
+		if s.Config.Hub != nil {
+			for _, source := range s.Config.Hub.Sources() {
+				if source.ID == "weather" {
+					weatherEnabled = source.Config.Enabled
+				}
+			}
+		}
+		write(w, 200, map[string]any{"llm": map[string]any{"configured": s.Analyzer.Configured(), "base_url": s.Analyzer.Config.BaseURL, "model": s.Analyzer.Config.Model}, "journal": map[string]any{"available": s.Config.Journal != nil, "vision_enabled": vision}, "data_sources_available": s.Config.Hub != nil, "feed_count": len(s.Config.FeedURLs), "weather_enabled": weatherEnabled, "storage": "bbolt / transaction / local", "live_trading": false})
 	})
 	mux.HandleFunc("POST /api/collect/weather", func(w http.ResponseWriter, r *http.Request) {
 		n, err := s.collect(r.Context(), "weather")
@@ -263,6 +285,19 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(quotes, func(i, j int) bool { return quotes[i].Symbol < quotes[j].Symbol })
 	decision := quant.ResolveMain(cornBars, time.Now().UTC())
+	var live *datahub.Live
+	if s.Config.Hub != nil {
+		current := s.Config.Hub.Live()
+		live = &current
+		if len(current.Quotes) > 0 {
+			quotes = liveCards(current)
+			decision = current.Main.Decision
+			mode = "public_quotes"
+			if current.SourceID == "market_bridge" {
+				mode = "authorized_quotes"
+			}
+		}
+	}
 	eventCount := len(events)
 	if len(events) > 100 {
 		events = events[:100]
@@ -270,7 +305,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	if len(observations) > 100 {
 		observations = observations[:100]
 	}
-	write(w, 200, map[string]any{"as_of": time.Now().UTC(), "mode": mode, "quotes": quotes, "events": events, "observations": observations, "main_contract": decision, "sources": s.sources(), "bar_count": len(bars), "event_count": eventCount, "llm_configured": s.Analyzer.Configured()})
+	write(w, 200, map[string]any{"as_of": time.Now().UTC(), "mode": mode, "quotes": quotes, "events": events, "observations": observations, "main_contract": decision, "market_live": live, "sources": s.sources(), "bar_count": len(bars), "event_count": eventCount, "llm_configured": s.Analyzer.Configured()})
 }
 
 var isCorn = regexp.MustCompile(`^c[0-9]{4}$`)
@@ -385,13 +420,17 @@ func (s *Server) addObservation(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, err)
 		return
 	}
-	validKind := o.Kind == "purchase_price" || o.Kind == "truck_arrivals" || o.Kind == "weather" || o.Kind == "related_price"
+	validKind := o.Kind == "purchase_price" || o.Kind == "truck_arrivals" || o.Kind == "weather" || o.Kind == "related_price" || o.Kind == "import_auction_rate"
 	if !validKind || o.Region == "" || o.Entity == "" || o.Unit == "" || o.Source == "" || o.ObservedAt.IsZero() || o.ObservedAt.After(time.Now().Add(5*time.Minute)) || math.IsNaN(o.Value) || math.IsInf(o.Value, 0) || !validURL(o.SourceURL) || len(o.Note) > 12000 {
 		fail(w, 400, errors.New("观测记录需要类型、地区、主体、数值、单位、来源和有效观察时间"))
 		return
 	}
 	if o.Kind != "weather" && o.Value < 0 {
 		fail(w, 400, errors.New("价格与车辆数不能为负数"))
+		return
+	}
+	if o.Kind == "import_auction_rate" && (o.Unit != "%" || o.Value > 100 || o.Value < 0) {
+		fail(w, 400, errors.New("拍卖成交率需为0至100，单位为%"))
 		return
 	}
 	if o.Kind == "truck_arrivals" && math.Trunc(o.Value) != o.Value {
@@ -521,6 +560,13 @@ func (s *Server) sources() []domain.SourceStatus {
 			sources[i] = status
 		}
 	}
+	if s.Config.Hub != nil {
+		base := []domain.SourceStatus{sources[1], sources[4], sources[5]}
+		for _, item := range s.Config.Hub.Sources() {
+			base = append(base, domain.SourceStatus{ID: item.ID, Name: item.Name, Kind: item.Kind, Status: item.Status, LastSuccess: item.LastSuccess, Message: item.FreshnessNote + " " + item.LastError})
+		}
+		return base
+	}
 	return sources
 }
 
@@ -560,6 +606,10 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) collect(ctx context.Context, kind string) (int, error) {
+	if kind == "weather" && s.Config.Hub != nil {
+		out, err := s.Config.Hub.Run(ctx, "weather", false)
+		return out.Added, err
+	}
 	s.mu.Lock()
 	if s.collecting[kind] {
 		s.mu.Unlock()
@@ -628,6 +678,9 @@ func (s *Server) collect(ctx context.Context, kind string) (int, error) {
 	return count, err
 }
 func (s *Server) Poll(ctx context.Context) {
+	if s.Config.Hub != nil {
+		go s.Config.Hub.Poll(ctx)
+	}
 	interval := s.Config.PollInterval
 	if interval < time.Minute {
 		interval = 5 * time.Minute
@@ -638,7 +691,7 @@ func (s *Server) Poll(ctx context.Context) {
 				log.Printf("feed collector: %v", err)
 			}
 		}
-		if s.Config.WeatherEnabled {
+		if s.Config.WeatherEnabled && s.Config.Hub == nil {
 			var last domain.SourceStatus
 			_ = s.Store.GetMeta("source_weather", &last)
 			if last.LastSuccess == nil || time.Since(*last.LastSuccess) >= time.Hour {

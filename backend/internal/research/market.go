@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"cornwatch/internal/domain"
 	"cornwatch/internal/quant"
@@ -18,6 +19,44 @@ func Analyze(bars []domain.Bar, allBars []domain.Bar) (MarketReport, error) {
 	if err := quant.ValidateBars(bars); err != nil {
 		return MarketReport{}, err
 	}
+	return analyze(bars, allBars)
+}
+
+// AnalyzeObserved validates prices for descriptive research only. It does not
+// require or manufacture settlement and price limits that a public source may omit.
+func AnalyzeObserved(bars []domain.Bar, hasOpenInterest bool) (MarketReport, error) {
+	if len(bars) == 0 || len(bars) > 2000 {
+		return MarketReport{}, fmt.Errorf("研究日线数量无效")
+	}
+	previous := ""
+	for _, b := range bars {
+		if b.Symbol != bars[0].Symbol || b.IsDemo || b.Timestamp.IsZero() || b.TradeDate <= previous || b.Timestamp.In(time.FixedZone("Asia/Shanghai", 8*3600)).Format("2006-01-02") != b.TradeDate {
+			return MarketReport{}, fmt.Errorf("研究日线需为同一真实合约且日期严格递增")
+		}
+		for _, v := range []float64{b.Open, b.High, b.Low, b.Close} {
+			if math.IsNaN(v) || math.IsInf(v, 0) || v <= 0 || v > 1e9 {
+				return MarketReport{}, fmt.Errorf("研究价格无效")
+			}
+		}
+		if b.Low > b.High || b.Open < b.Low || b.Open > b.High || b.Close < b.Low || b.Close > b.High || b.Volume < 0 || b.OpenInterest < 0 {
+			return MarketReport{}, fmt.Errorf("研究量价范围无效")
+		}
+		previous = b.TradeDate
+	}
+	r, err := analyze(bars, nil)
+	if err != nil {
+		return r, err
+	}
+	if !hasOpenInterest {
+		r.Latest.OIChange = nil
+		r.Latest.OIChangePct = nil
+		r.Latest.PriceOILabel = "来源存在持仓缺失，未比较增减仓"
+		r.Insights[0].Body = r.Latest.PriceOILabel
+		r.Warnings = append(r.Warnings, "部分日线未披露持仓，0仅为缺失占位，不用于判断资金方向。")
+	}
+	return r, nil
+}
+func analyze(bars []domain.Bar, allBars []domain.Bar) (MarketReport, error) {
 	last := bars[len(bars)-1]
 	for _, b := range bars {
 		if b.Symbol != last.Symbol || b.IsDemo != last.IsDemo {

@@ -1,0 +1,190 @@
+.data-sources { margin-bottom: 25px; }
+.ds-console-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin: 29px 0 20px; }
+.ds-console-heading h2 { color: #d3e5e5; font-size: 18px; font-weight: 500; }
+.ds-console-heading p { color: #7391a0; font-size: 11px; line-height: 1.9; margin-top: 7px; }
+.ds-console-heading > button { flex-shrink: 0; font-size: 10px; }
+.ds-overview { display: grid; grid-template-columns: 1fr 1fr 1fr 1.65fr; border: 1px solid #2c434a; border-radius: 9px; background: linear-gradient(105deg, #162b2e, #121f29); overflow: hidden; }
+.ds-overview > div { display: flex; align-items: center; gap: 13px; padding: 18px 20px; min-width: 0; }
+.ds-overview > div + div { border-left: 1px solid #2b4149; }
+.ds-overview svg { color: #77ac9b; flex-shrink: 0; }
+.ds-overview > div > span { min-width: 0; font-size: 10px; color: #7d9b9f; }
+.ds-overview strong { display: block; font: 22px 'IBM Plex Mono', ui-monospace, monospace; color: #c2e0d5; margin-top: 8px; line-height: 1.3; }
+.ds-overview strong > small { font: 9px system-ui, sans-serif; color: #648a88; margin-left: 4px; }
+.ds-overview .attention svg, .ds-overview .attention strong { color: #d8b77f; }
+.ds-overview .ds-active-source strong { font: 12px system-ui, sans-serif; line-height: 1.7; overflow-wrap: anywhere; margin: 6px 0 3px; }
+.ds-active-source > span > small { display: block; font-size: 9px; color: #7a998a; line-height: 1.8; }
+.ds-console-note { display: flex; align-items: start; gap: 9px; font-size: 10px; line-height: 1.9; color: #83a293; padding: 13px 2px; margin-bottom: 10px; }
+.ds-console-note > svg { flex-shrink: 0; margin-top: 2px; color: #689480; }
+.ds-paused, .ds-draft-banner, .ds-load-error { display: flex; align-items: start; gap: 10px; border: 1px solid #6a5c3655; border-radius: 7px; padding: 12px 15px; margin-bottom: 17px; background: #614d221a; color: #b5a983; font-size: 10px; line-height: 1.9; }
+.ds-paused > svg, .ds-load-error > svg { flex-shrink: 0; margin-top: 3px; }
+.ds-draft-banner { background: #2a475122; border-color: #375666; color: #98b6c1; }
+.ds-load-error { background: #572b2122; border-color: #674038; color: #d6a799; }
+.ds-load-error > span { flex: 1; overflow-wrap: anywhere; }
+.ds-load-error > button { flex-shrink: 0; }
+.ds-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.ds-card { background: linear-gradient(135deg, #15242c, #111c26 60%); min-width: 0; }
+.ds-card.has-error { border-color: #63483e; }
+.ds-card-header { display: flex; align-items: start; gap: 13px; padding: 22px 21px 17px; }
+.ds-source-icon { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid #385447; border-radius: 10px; flex-shrink: 0; background: #24433544; color: #8ebc9a; margin-top: 3px; }
+.ds-source-icon.amber { background: #51402544; border-color: #69543488; color: #c8ad7b; }
+.ds-source-icon.blue { background: #24425744; border-color: #3f5e7188; color: #87b5cb; }
+.ds-source-title { flex: 1; min-width: 0; }
+.ds-source-kind { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 8px; color: #668698; margin-bottom: 8px; }
+.ds-origin, .ds-current { display: inline-block; padding: 2px 5px; font-size: 8px; line-height: 1.4; border-radius: 3px; border: 1px solid #385747; background: #28423633; color: #8fb7a0; }
+.ds-origin.amber { border-color: #655337; background: #53422433; color: #c0ab7c; }
+.ds-origin.blue { border-color: #345261; background: #27405133; color: #8eb1c4; }
+.ds-current { color: #99d6c1; background: #28513e55; border-color: #406a57; }
+.ds-source-title h3 { font-size: 14px; line-height: 1.7; color: #c6dadc; font-weight: 500; overflow-wrap: anywhere; }
+.ds-source-title p { color: #688a98; font-size: 10px; line-height: 1.9; margin-top: 4px; }
+.ds-card-header > button { margin-top: 2px; }
+.ds-card-header > button.active { color: #a0d4bd; background: #254237; }
+.ds-card-body { padding: 0 21px 20px; }
+.ds-status-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 13px; }
+.ds-status { display: inline-flex; align-items: center; gap: 6px; font-size: 9px; color: #8ca7ad; }
+.ds-status > i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.ds-status.ok { color: #81c7aa; }
+.ds-status.error { color: #e29a8b; }
+.ds-status.running { color: #83bace; }
+.ds-status.disabled, .ds-status.unconfigured { color: #7a8f9c; }
+.ds-freshness { display: inline-flex; padding: 3px 6px; border-radius: 4px; background: #293b4355; color: #8ba3af; font-size: 8px; border: 1px solid #334a5444; }
+.ds-freshness.fresh { background: #294c362b; color: #8cb89b; border-color: #4b6d4533; }
+.ds-freshness.stale { background: #6b51232b; color: #cfb17a; border-color: #80672d66; }
+.ds-freshness.market_closed { background: #33435744; color: #a0afc6; border-color: #485b7233; }
+.ds-unsaved { color: #c6ad74; font-size: 8px; margin-left: auto; }
+.ds-description { color: #88a3ae; font-size: 10px; line-height: 1.95; overflow-wrap: anywhere; }
+.ds-freshness-note { font-size: 9px; line-height: 1.9; color: #628795; margin-top: 8px; overflow-wrap: anywhere; }
+.ds-freshness-note.warning { color: #bba578; }
+.ds-coverage { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 13px; min-height: 21px; }
+.ds-coverage > span { font-size: 9px; color: #658592; margin-right: 3px; }
+.ds-coverage > b { font-size: 8px; font-weight: 400; line-height: 1.7; color: #91b8b1; border: 1px solid #304e4e; background: #18342f44; border-radius: 4px; padding: 2px 5px; overflow-wrap: anywhere; }
+.ds-coverage > small { font-size: 8px; color: #587a88; }
+.ds-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 13px; margin: 17px 0 0; padding: 16px 14px; border: 1px solid #29424b; border-radius: 7px; background: #0b192333; }
+.ds-times > div { min-width: 0; }
+.ds-times dt { color: #608290; font-size: 8px; line-height: 1.7; }
+.ds-times dd { margin: 6px 0 0; color: #9ab9c1; font: 10px 'IBM Plex Mono', ui-monospace, monospace; line-height: 1.8; overflow-wrap: anywhere; }
+.ds-record-counts { display: flex; align-items: center; flex-wrap: wrap; gap: 9px 15px; font-size: 8px; color: #60808d; padding: 11px 2px; }
+.ds-record-counts b { font: 9px 'IBM Plex Mono', ui-monospace, monospace; color: #a1bdbb; margin-left: 4px; }
+.ds-record-counts .ds-fail-count, .ds-record-counts .ds-fail-count b { color: #d9a28a; }
+.ds-last-error { background: #4d2d2422; border: 1px solid #65443666; border-radius: 6px; padding: 10px 12px; margin: 4px 0 14px; font-size: 9px; color: #c49c88; }
+.ds-last-error > summary { display: flex; align-items: center; gap: 7px; cursor: pointer; list-style: none; }
+.ds-last-error > summary::-webkit-details-marker { display: none; }
+.ds-last-error > summary > svg { flex-shrink: 0; }
+.ds-last-error > summary > span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-last-error > p { color: #c7a79a; font-size: 10px; line-height: 1.9; overflow-wrap: anywhere; white-space: pre-wrap; margin-top: 10px; }
+.ds-last-error > small { font-size: 8px; color: #947c6a; display: block; margin-top: 8px; line-height: 1.8; }
+.ds-access-note { display: flex; align-items: start; gap: 9px; border-top: 1px solid #2a3f48; padding-top: 13px; }
+.ds-access-note > svg { flex-shrink: 0; color: #698f83; margin-top: 2px; }
+.ds-access-note > div { flex: 1; min-width: 0; }
+.ds-access-note strong { font-size: 9px; color: #8fabaa; font-weight: 500; }
+.ds-access-note p { color: #75939b; font-size: 9px; line-height: 1.9; margin-top: 5px; overflow-wrap: anywhere; }
+.ds-access-note small { display: block; font-size: 8px; color: #5d7b87; line-height: 1.9; margin-top: 4px; overflow-wrap: anywhere; }
+.ds-access-note > a { color: #729e94; padding: 3px; flex-shrink: 0; }
+.ds-access-note > a:hover { color: #bbe0ca; }
+.ds-guide { margin-top: 14px; padding: 11px 0 0; border-top: 1px solid #263d4533; }
+.ds-guide > summary { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 9px; color: #70998c; list-style: none; }
+.ds-guide > summary::-webkit-details-marker { display: none; }
+.ds-guide > summary > svg:last-child { margin-left: auto; }
+.ds-guide[open] > summary > svg:last-child { transform: rotate(180deg); }
+.ds-guide > div { margin-top: 12px; padding: 13px; border-left: 2px solid #3f6858; background: #1d3b3022; border-radius: 0 5px 5px 0; font-size: 10px; line-height: 1.95; color: #8aa89f; }
+.ds-guide p + p { margin-top: 10px; }
+.ds-guide ol { padding-left: 18px; margin: 10px 0; }
+.ds-guide li { margin-top: 8px; }
+.ds-guide p.ds-guide-foot { font-size: 9px; color: #64867d; }
+.ds-guide code { overflow-wrap: anywhere; }
+.ds-config-form { margin-top: 19px; border-top: 1px solid #36554e; padding-top: 18px; }
+.ds-config-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.ds-config-heading h4 { font-size: 12px; color: #a5cebe; font-weight: 500; }
+.ds-config-heading > span { color: #5c8b7d; font: 9px 'IBM Plex Mono', ui-monospace, monospace; }
+.ds-config-form fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
+.ds-config-form label { font-size: 10px; color: #8baab3; }
+.ds-config-form label small { font-size: 9px; font-weight: 400; line-height: 1.85; color: #648491; }
+.ds-config-form input, .ds-config-form select { font-size: 11px; padding: 8px 10px; border-color: #2e4853; }
+.ds-config-form .ds-toggle-label { display: flex; flex-direction: row; align-items: start; gap: 10px; margin-bottom: 20px; }
+.ds-toggle-label > input, .ds-clear-token > input { width: 13px; height: 13px; flex-shrink: 0; accent-color: #82cfad; padding: 0; margin: 2px 0 0; }
+.ds-toggle-label strong { font-size: 11px; font-weight: 500; color: #b3cfc7; display: block; }
+.ds-toggle-label small { display: block; margin-top: 5px; }
+.ds-interval-label > div { display: flex; align-items: center; gap: 8px; }
+.ds-interval-label > div > input { flex: 1; }
+.ds-interval-label > div > select { width: 90px; }
+.ds-token-state { color: #699b89; font-size: 9px; }
+.ds-config-form .ds-clear-token { display: flex; align-items: center; flex-direction: row; gap: 8px; font-size: 9px; color: #b1a38b; }
+.ds-save-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+.ds-save-actions > span { flex-basis: 100%; color: #7a9c91; font-size: 9px; line-height: 1.8; }
+.ds-save-actions > button { font-size: 10px; }
+.ds-save-actions .primary-button { padding: 7px 10px; }
+.ds-conflict { font-size: 10px; color: #c0a87d; line-height: 1.9; padding: 13px; border: 1px solid #77603b88; border-radius: 6px; background: #4a371e33; margin-bottom: 18px; }
+.ds-conflict strong { font-weight: 500; color: #dfbb83; }
+.ds-conflict p { margin: 7px 0; }
+.ds-conflict p { overflow-wrap: anywhere; }
+.ds-conflict > div { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.ds-conflict button { font-size: 9px; color: #a1c2ad; white-space: normal; text-align: left; }
+.ds-action-notice { display: flex; align-items: start; gap: 9px; border: 1px solid #3c6754; background: #22493533; border-radius: 7px; padding: 12px; margin-top: 17px; color: #a2c9b5; }
+.ds-action-notice > svg { flex-shrink: 0; margin-top: 3px; }
+.ds-action-notice > div { min-width: 0; flex: 1; }
+.ds-action-notice strong { font-size: 10px; font-weight: 500; line-height: 1.8; }
+.ds-action-notice p { font-size: 9px; line-height: 1.9; margin-top: 5px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ds-action-notice small { display: block; font-size: 8px; color: #659683; line-height: 1.9; margin-top: 8px; }
+.ds-action-notice.error { border-color: #754c3f; background: #4c2a2033; color: #d2a591; }
+.ds-action-notice.error small { color: #9d8374; }
+.ds-action-notice > button { margin-top: -3px; margin-right: -4px; }
+.ds-action-facts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; color: #85b69f; font-size: 8px; line-height: 1.9; }
+.ds-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-top: 1px solid #2a414b; background: #0e1b2433; }
+.ds-card-footer > div:first-child { flex: 1; min-width: 0; }
+.ds-card-footer > div > span { display: flex; align-items: center; gap: 5px; font-size: 9px; color: #71958f; line-height: 1.8; }
+.ds-card-footer small { display: block; font-size: 8px; color: #577b88; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-card-actions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.ds-card-actions button { font-size: 9px; gap: 5px; padding: 7px 9px; }
+.ds-card-actions .text-button { padding-left: 0; padding-right: 0; }
+.ds-card-actions .ds-sync-button { color: #9ac8b7; border-color: #35584c; background: #1b39302b; }
+.ds-console-footer { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 9px; font-size: 9px; color: #597e8e; line-height: 1.8; padding: 15px 0 0; }
+.ds-loading { min-height: 250px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 15px; color: #8ab2a4; font-size: 12px; }
+@media (min-width: 1600px) {
+  .ds-card-header { padding: 25px 25px 18px; }
+  .ds-card-body { padding: 0 25px 24px; }
+  .ds-card-footer { padding: 16px 24px; }
+  .ds-source-title h3 { font-size: 15px; }
+  .ds-times dd { font-size: 11px; }
+  .ds-source-title p, .ds-description { font-size: 11px; }
+}
+@media (max-width: 1250px) {
+  .ds-grid { gap: 16px; }
+  .ds-overview { grid-template-columns: 1fr 1fr 1fr 1.3fr; }
+  .ds-overview > div { padding: 16px 14px; gap: 9px; }
+  .ds-overview > div > span { font-size: 9px; }
+  .ds-overview > div > svg { width: 16px; }
+  .ds-overview strong { font-size: 20px; }
+  .ds-card-header { padding: 18px 16px 15px; gap: 10px; }
+  .ds-source-icon { width: 35px; height: 35px; border-radius: 8px; }
+  .ds-source-icon > svg { width: 19px; }
+  .ds-source-title h3 { font-size: 12px; }
+  .ds-card-body { padding: 0 16px 17px; }
+  .ds-times { padding: 13px 11px; gap: 13px 10px; }
+  .ds-times dd { font-size: 9px; }
+  .ds-card-footer { padding: 13px 15px; flex-wrap: wrap; gap: 11px; }
+  .ds-card-footer > div:first-child { flex-basis: 100%; }
+  .ds-card-actions { margin-left: auto; }
+}
+@media (max-width: 1050px) {
+  .ds-overview { grid-template-columns: repeat(3, 1fr); }
+  .ds-overview .ds-active-source { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #2b4149; padding: 12px 15px; }
+  .ds-active-source > span { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; }
+  .ds-overview .ds-active-source strong { margin: 0; font-size: 11px; }
+  .ds-grid { grid-template-columns: 1fr; }
+  .ds-source-title h3 { font-size: 14px; }
+  .ds-source-icon { width: 40px; height: 40px; }
+  .ds-card-header { padding: 21px; }
+  .ds-card-body { padding: 0 21px 20px; }
+  .ds-times { padding: 16px; }
+  .ds-times dd { font-size: 11px; }
+  .ds-card-footer { flex-wrap: nowrap; padding: 14px 20px; }
+  .ds-card-footer > div:first-child { flex-basis: auto; }
+  .ds-console-heading h2 { font-size: 16px; }
+}
+@media (max-width: 800px) {
+  .ds-console-heading { align-items: start; }
+  .ds-console-heading > button { font-size: 9px; padding: 8px; }
+  .ds-console-heading p { font-size: 10px; }
+  .ds-card-footer { flex-wrap: wrap; }
+  .ds-card-footer > div:first-child { flex-basis: 100%; }
+  .ds-times dd { font-size: 10px; }
+}

@@ -19,16 +19,23 @@ type Bar struct {
 }
 
 type Quote struct {
-	Symbol        string    `json:"symbol"`
-	Name          string    `json:"name"`
-	Last          float64   `json:"last"`
-	PreviousClose float64   `json:"previous_close"`
-	ChangePct     float64   `json:"change_pct"`
-	Volume        int64     `json:"volume"`
-	OpenInterest  int64     `json:"open_interest"`
-	ObservedAt    time.Time `json:"observed_at"`
-	Source        string    `json:"source"`
-	IsDemo        bool      `json:"is_demo"`
+	Product            string    `json:"product,omitempty"`
+	PreviousSettlement float64   `json:"previous_settlement,omitempty"`
+	ChangeBasis        string    `json:"change_basis,omitempty"`
+	ReceivedAt         time.Time `json:"received_at,omitempty"`
+	SourceURL          string    `json:"source_url,omitempty"`
+	Freshness          string    `json:"freshness,omitempty"`
+	FreshnessNote      string    `json:"freshness_note,omitempty"`
+	Symbol             string    `json:"symbol"`
+	Name               string    `json:"name"`
+	Last               float64   `json:"last"`
+	PreviousClose      float64   `json:"previous_close"`
+	ChangePct          float64   `json:"change_pct"`
+	Volume             int64     `json:"volume"`
+	OpenInterest       int64     `json:"open_interest"`
+	ObservedAt         time.Time `json:"observed_at"`
+	Source             string    `json:"source"`
+	IsDemo             bool      `json:"is_demo"`
 }
 
 type Analysis struct {

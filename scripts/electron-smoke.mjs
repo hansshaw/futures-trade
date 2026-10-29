@@ -17,6 +17,7 @@ const port = listener.address().port;
 await new Promise(resolve => listener.close(resolve));
 const env = { ...process.env, XDG_CONFIG_HOME: profile };
 for (const key of Object.keys(env)) if (key.startsWith('LLM_') || key.startsWith('CORNWATCH_') || key === 'ELECTRON_RUN_AS_NODE') delete env[key];
+env.CORNWATCH_AUTO_SYNC = 'false';
 const binary = process.platform === 'darwin' ? 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron' : process.platform === 'win32' ? 'node_modules/electron/dist/electron.exe' : 'node_modules/electron/dist/electron';
 const packagedBinary = process.argv[2];
 const launchArgs = [...(packagedBinary ? [] : ['.']), `--remote-debugging-port=${port}`, `--user-data-dir=${userData}`];

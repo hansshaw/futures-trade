@@ -13,8 +13,8 @@ let window;
 let quitting = false;
 let streamController;
 let reconnectTimer;
-const allowedGet = /^\/api\/(health|dashboard|bars|events|observations|sources|backtests|settings|research\/market|journals|journals\/[a-zA-Z0-9_-]+|journal-assets\/[a-zA-Z0-9_-]+|journal-reviews|journal-reviews\/[a-zA-Z0-9_-]+\/snapshot|journal-lessons)(\?[^#]*)?$/;
-const allowedPost = /^\/api\/(events|events\/[a-zA-Z0-9_-]+\/analyze|observations|import\/bars|backtests|collect\/(weather|feeds)|research\/(risk|validate)|journals|journals\/[a-zA-Z0-9_-]+(?:\/archive)?|journal-assets|journal-reviews|journal-lessons\/[a-zA-Z0-9_-]+\/revoke|journal-reviews\/[a-zA-Z0-9_-]+\/lessons\/[a-zA-Z0-9_-]+\/accept)$/;
+const allowedGet = /^\/api\/(health|data-sources|market\/live|dashboard|bars|events|observations|sources|backtests|settings|research\/(market|current)|journals|journals\/[a-zA-Z0-9_-]+|journal-assets\/[a-zA-Z0-9_-]+|journal-reviews|journal-reviews\/[a-zA-Z0-9_-]+\/snapshot|journal-lessons)(\?[^#]*)?$/;
+const allowedPost = /^\/api\/(data-sources\/(sina|liaoning|moa|weather|boyar_prices|boyar_arrivals|import_auction|market_bridge|industry_bridge)\/(config|test|sync)|events|events\/[a-zA-Z0-9_-]+\/analyze|observations|import\/bars|backtests|collect\/(weather|feeds)|research\/(risk|validate|current)|journals|journals\/[a-zA-Z0-9_-]+(?:\/archive)?|journal-assets|journal-reviews|journal-lessons\/[a-zA-Z0-9_-]+\/revoke|journal-reviews\/[a-zA-Z0-9_-]+\/lessons\/[a-zA-Z0-9_-]+\/accept)$/;
 
 function startBackend() {
   return new Promise((resolve, reject) => {

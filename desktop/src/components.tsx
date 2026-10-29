@@ -47,6 +47,7 @@ export function LineChart({ points: originalPoints, unit = '元 / 吨', color = 
     {[0, 1, 2, 3, 4].map(index => { const value = high - (high - low) * index / 4; return <g key={index}><line x1={left} x2={width - right} y1={y(value)} y2={y(value)} className="chart-grid" /><text x={left - 14} y={y(value) + 4} textAnchor="end" className="chart-label">{number(value, Math.abs(value) < 100 ? 1 : 0)}</text></g>; })}
     <path d={`${line} L${x(points.length - 1)},${height - bottom} L${left},${height - bottom} Z`} fill={`url(#${gradient})`} />
     <path d={line} fill="none" stroke={color} strokeWidth="2.3" strokeLinejoin="round" />
+    {points.length === 1 && <circle cx={x(0)} cy={y(points[0].value)} r="4" fill={color} />}
     {ticks.map(index => <text key={index} x={x(index)} y={height - 8} textAnchor={index === 0 ? 'start' : index === points.length - 1 ? 'end' : 'middle'} className="chart-label">{/^\d{4}-\d{2}-\d{2}/.test(points[index].label) ? points[index].label.slice(5, 10) : points[index].label}</text>)}
     {hover !== null && <g><line x1={x(selected)} x2={x(selected)} y1={top} y2={height - bottom} stroke="#6c8092" strokeDasharray="4 4" /><circle cx={x(selected)} cy={y(points[selected].value)} r="4" fill={color} stroke="#0c131c" strokeWidth="2" /></g>}
   </svg></div>;

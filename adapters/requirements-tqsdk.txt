@@ -1,0 +1,3 @@
+# Optional authorized market-data sidecar; verified against PyPI on 2026-10-28.
+# Install in a dedicated virtual environment, not the Electron/Go application.
+tqsdk==3.10.4
