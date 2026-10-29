@@ -53,6 +53,7 @@ func TestNoAuctionPublicationPreservesPriorDataAndRecordsHealthyCheck(t *testing
 	}
 	before := sourceByID(t, h, "import_auction")
 	h.fetchers["import_auction"] = func(context.Context, Config) (Batch, error) { return Batch{}, errors.New("temporary outage") }
+	advanceHubClock(h, 6*time.Second)
 	if _, err := h.Run(context.Background(), "import_auction", false); err == nil {
 		t.Fatal("expected failed attempt")
 	}
@@ -124,6 +125,7 @@ func TestFirstEmptyAuctionWindowIsHealthyButHasNoDataTimestamp(t *testing.T) {
 	// An ordinary empty fetch is still an error; a transport failure cannot be
 	// hidden by merely attaching a no-publication explanation.
 	for _, failure := range []bool{false, true} {
+		advanceHubClock(h, 6*time.Second)
 		h.fetchers["import_auction"] = func(context.Context, Config) (Batch, error) {
 			if failure {
 				return Batch{NoPublication: "no results"}, errors.New("network failed")

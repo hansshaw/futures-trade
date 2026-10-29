@@ -188,3 +188,4 @@
   .ds-card-footer > div:first-child { flex-basis: 100%; }
   .ds-times dd { font-size: 10px; }
 }
+.ds-polling{display:flex;flex-wrap:wrap;gap:8px 16px;padding:12px;background:#142a33;border:1px solid #2c434d;border-radius:6px;font-size:11px;color:#92acbb;margin-bottom:14px}.ds-polling b{color:#bde3d6}.ds-polling small{flex-basis:100%;line-height:1.7;color:#819cae}.ds-frequency-preset{display:flex;align-items:flex-start;gap:10px;flex-direction:column}.ds-frequency-preset small{font-size:10px;color:#91a8b8;line-height:1.7}

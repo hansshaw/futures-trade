@@ -36,6 +36,10 @@ func testHub(t *testing.T) (*Hub, *store.Store, string) {
 	h.now = func() time.Time { return testNow }
 	return h, s, path
 }
+func advanceHubClock(h *Hub, delta time.Duration) {
+	now := h.now().Add(delta)
+	h.now = func() time.Time { return now }
+}
 func saveBridge(t *testing.T, h *Hub, id, endpoint, token string) Source {
 	t.Helper()
 	c := h.configs[id]
@@ -158,6 +162,9 @@ func TestConcurrentRunAndSaveAreBusy(t *testing.T) {
 	if _, err := h.Run(context.Background(), "sina", true); !errors.Is(err, ErrBusy) {
 		t.Fatalf("parallel run: %v", err)
 	}
+	if _, err := h.RunScheduled(context.Background(), "sina"); !errors.Is(err, ErrBusy) {
+		t.Fatalf("report/scheduled parallel run: %v", err)
+	}
 	c := h.configs["sina"]
 	if _, err := h.Save("sina", ConfigRequest{Revision: c.Revision, Enabled: true, IntervalSeconds: c.IntervalSeconds}); !errors.Is(err, ErrBusy) {
 		t.Fatalf("save while running: %v", err)
@@ -192,6 +199,7 @@ func TestConnectionTestDoesNotWrite(t *testing.T) {
 		t.Fatalf("test wrote metadata: %v", err)
 	}
 	h.fetchers["liaoning"] = func(context.Context, Config) (Batch, error) { return Batch{}, errors.New("offline") }
+	advanceHubClock(h, 6*time.Second)
 	if _, err := h.Run(context.Background(), "liaoning", true); err == nil {
 		t.Fatal("failed test accepted")
 	}
@@ -214,6 +222,7 @@ func TestFailedSyncRetainsSnapshotsAndBacksOff(t *testing.T) {
 		return Batch{}, errors.New("failure at " + endpoint + " with very-secret-token")
 	}
 	for i := 1; i <= 8; i++ {
+		advanceHubClock(h, 6*time.Second)
 		if _, err := h.Run(context.Background(), "market_bridge", false); err == nil || strings.Contains(err.Error(), "very-secret-token") || strings.Contains(err.Error(), endpoint) {
 			t.Fatalf("unsafe error: %v", err)
 		}
@@ -222,7 +231,7 @@ func TestFailedSyncRetainsSnapshotsAndBacksOff(t *testing.T) {
 		if !reflect.DeepEqual(got.Quotes, before.Quotes) || !reflect.DeepEqual(got.Main, before.Main) || !reflect.DeepEqual(got.PriceHistory, before.PriceHistory) || !got.LastSuccess.Equal(*before.LastSuccess) {
 			t.Fatal("failure replaced last good snapshot")
 		}
-		if status.Status != "error" || status.ConsecutiveFailures != i || status.NextRun.Sub(testNow) != time.Duration(10*(1<<min(i, 6)))*time.Second {
+		if status.Status != "error" || status.ConsecutiveFailures != i || status.NextRun.Sub(h.now()) != 2500*time.Millisecond*time.Duration(1<<min(i, 6)) {
 			t.Fatalf("backoff=%+v", status)
 		}
 	}
@@ -231,12 +240,13 @@ func TestFailedSyncRetainsSnapshotsAndBacksOff(t *testing.T) {
 		t.Fatalf("snapshots wrote bars: %d %v", len(bars), err)
 	}
 	h.fetchers["market_bridge"] = func(context.Context, Config) (Batch, error) { return quoteBatch(quotes), nil }
+	advanceHubClock(h, 6*time.Second)
 	out, err := h.Run(context.Background(), "market_bridge", false)
 	if err != nil || out.Added != 0 || out.Duplicates != 2 || h.records["market_bridge"].ConsecutiveFailures != 0 {
 		t.Fatalf("recovery: %+v %v", out, err)
 	}
-	if runDelay(Config{IntervalSeconds: 604800}, 2) != 24*time.Hour {
-		t.Fatal("backoff cap missing")
+	if runDelay(Config{IntervalSeconds: 604800}, 2) != 7*24*time.Hour || runDelay(Config{IntervalSeconds: 604800}, 0) != 7*24*time.Hour {
+		t.Fatal("backoff or normal schedule shortened the configured weekly interval")
 	}
 }
 
@@ -262,6 +272,7 @@ func TestPersistenceFailureDoesNotPublishTentativeState(t *testing.T) {
 	h.store = failingMeta{s, "datahub_record_sina"}
 	quotes = exampleQuotes("public", testNow.Add(-29*time.Minute))
 	quotes[0].Last = 9999
+	advanceHubClock(h, 6*time.Second)
 	if _, err := h.Run(context.Background(), "sina", false); err == nil {
 		t.Fatal("disk error lost")
 	}
@@ -269,7 +280,7 @@ func TestPersistenceFailureDoesNotPublishTentativeState(t *testing.T) {
 	if !reflect.DeepEqual(before.Quotes, after.Quotes) || !reflect.DeepEqual(before.PriceHistory, after.PriceHistory) || !reflect.DeepEqual(before.Main, after.Main) || !after.LastSuccess.Equal(*before.LastSuccess) {
 		t.Fatal("tentative state escaped failed persistence")
 	}
-	if after.ConsecutiveFailures != 1 || after.NextRun.Sub(testNow) != 120*time.Second {
+	if after.ConsecutiveFailures != 1 || after.NextRun.Sub(h.now()) != 5*time.Second {
 		t.Fatal("persistence failure not backed off")
 	}
 	var disk Record
@@ -359,6 +370,7 @@ func TestRestartPreservesConfigDataAndFailureHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.fetchers["market_bridge"] = func(context.Context, Config) (Batch, error) { return Batch{}, errors.New("offline") }
+	advanceHubClock(h, 6*time.Second)
 	if _, err := h.Run(context.Background(), "market_bridge", false); err == nil {
 		t.Fatal("expected failure")
 	}
@@ -377,7 +389,10 @@ func TestRestartPreservesConfigDataAndFailureHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 	restored.now = h.now
-	if !reflect.DeepEqual(before, restored.Live()) || restored.configs["market_bridge"] != cfg {
+	after := restored.Live()
+	// Rolling request telemetry belongs to the running process, not source data.
+	before.Polling = after.Polling
+	if !reflect.DeepEqual(before, after) || restored.configs["market_bridge"] != cfg {
 		t.Fatal("restart lost snapshot or credential/config")
 	}
 	if sourceByID(t, restored, "market_bridge").ConsecutiveFailures != 1 {
@@ -466,14 +481,19 @@ func TestPollRespectsDueTimeDisabledSourcesAndCancellation(t *testing.T) {
 
 func TestRestartReevaluatesChangedIntervalWithoutEndpointChange(t *testing.T) {
 	h, s, _ := testHub(t)
+	initial := h.configs["sina"]
+	if _, err := h.Save("sina", ConfigRequest{Revision: initial.Revision, Enabled: true, IntervalSeconds: 60}); err != nil {
+		t.Fatal(err)
+	}
 	h.fetchers["sina"] = func(context.Context, Config) (Batch, error) { return Batch{}, errors.New("offline") }
 	for i := 0; i < 3; i++ {
+		advanceHubClock(h, 6*time.Second)
 		if _, err := h.Run(context.Background(), "sina", false); err == nil {
 			t.Fatal("expected source failure")
 		}
 	}
 	old := h.records["sina"]
-	if old.NextRun.Sub(testNow) != 8*time.Minute {
+	if old.NextRun.Sub(h.now()) != 8*time.Minute {
 		t.Fatal("test requires a persisted long backoff")
 	}
 	c := h.configs["sina"]
@@ -507,7 +527,7 @@ func TestRestartReevaluatesChangedIntervalWithoutEndpointChange(t *testing.T) {
 	if err := s.GetMeta("datahub_record_sina", &persisted); err != nil {
 		t.Fatal(err)
 	}
-	if persisted.ConfigRevision != c.Revision+1 || persisted.NextRun.Sub(testNow) != 30*time.Second {
+	if persisted.ConfigRevision != c.Revision+1 || persisted.NextRun.Sub(h.now()) != 30*time.Second {
 		t.Fatal("new run did not persist the current scheduling revision")
 	}
 }

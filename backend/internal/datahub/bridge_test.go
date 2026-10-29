@@ -56,7 +56,7 @@ func TestBridgeMarketPreservesProducerTimes(t *testing.T) {
 	if !b.Quotes[0].ReceivedAt.Equal(p.Quotes[0].ReceivedAt) || !b.Quotes[0].ObservedAt.Equal(p.Quotes[0].ObservedAt) {
 		t.Fatal("producer timestamp overwritten")
 	}
-	if !b.Quotes[3].ReceivedAt.Equal(testNow) {
+	if b.Quotes[3].ReceivedAt.Before(testNow) || b.Quotes[3].ReceivedAt.After(testNow.Add(time.Second)) {
 		t.Fatal("missing producer time not recorded locally")
 	}
 	if b.Quotes[0].SourceURL != server.URL || b.Quotes[0].Source != "用户配置的授权行情桥接" || b.Quotes[0].ChangeBasis != "previous_settlement" {
@@ -281,5 +281,32 @@ func TestWeatherBatchUsesAcquisitionTimesAndResearchAlerts(t *testing.T) {
 	repeated := weatherBatch([]domain.Observation{o})
 	if repeated.Events[0].ID != e.ID {
 		t.Fatal("weather alert identity is not stable")
+	}
+}
+
+func TestBridgeMissingReceiptUsesResponseCompletionNotRequestStart(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(25 * time.Millisecond)
+		observed := time.Now().UTC()
+		p := bridgePayload{GeneratedAt: observed, Quotes: []market.Quote{{Symbol: "c2701", Last: 2300, PreviousSettlement: 2290, Volume: 100, OpenInterest: 200, ObservedAt: observed}}}
+		if err := json.NewEncoder(w).Encode(p); err != nil {
+			t.Error(err)
+		}
+	}))
+	defer server.Close()
+	requestStart := time.Now().UTC()
+	b, err := fetchBridge(context.Background(), server.Client(), Config{Endpoint: server.URL}, true, requestStart)
+	completed := time.Now().UTC()
+	if err != nil {
+		t.Fatalf("fresh quote generated during request rejected: %v", err)
+	}
+	if len(b.Quotes) != 1 {
+		t.Fatal("missing quote")
+	}
+	q := b.Quotes[0]
+	// Compare against the payload's own timestamp without inventing a producer
+	// receive time or moving observed_at to make the ordering pass.
+	if !q.ObservedAt.After(requestStart) || q.ReceivedAt.Before(q.ObservedAt) || q.ReceivedAt.After(completed) {
+		t.Fatalf("bad receipt fallback: request=%s observed=%s received=%s completed=%s", requestStart, q.ObservedAt, q.ReceivedAt, completed)
 	}
 }

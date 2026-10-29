@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 func send(w http.ResponseWriter, status int, value any) {
@@ -15,8 +16,12 @@ func send(w http.ResponseWriter, status int, value any) {
 }
 func replyError(w http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
-	if errors.Is(err, ErrBusy) {
+	if errors.Is(err, ErrBusy) || errors.Is(err, ErrCooldown) {
 		status = 429
+	}
+	var cooldown *CooldownError
+	if errors.As(err, &cooldown) {
+		w.Header().Set("Retry-After", strconv.Itoa(cooldown.RetrySeconds()))
 	}
 	if errors.Is(err, ErrConflict) {
 		status = 409
@@ -40,7 +45,7 @@ func (h *Hub) Register(mux *http.ServeMux) {
 			send(w, 400, map[string]string{"error": "配置JSON格式无效"})
 			return
 		}
-		result, err := h.Save(r.PathValue("id"), request)
+		result, err := h.SaveWhenIdle(r.Context(), r.PathValue("id"), request)
 		if err != nil {
 			replyError(w, err)
 			return

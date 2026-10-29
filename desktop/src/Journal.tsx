@@ -108,7 +108,7 @@ function ReviewCard({ review, entries, accepting, onAccept, onOpen, open }: { re
   </details>;
 }
 
-export default function Journal({ llmConfigured, visionEnabled, seed, onSeedConsumed, active = true }: { llmConfigured: boolean; visionEnabled: boolean; seed?: JournalSeed; onSeedConsumed?: () => void; active?: boolean }) {
+export default function Journal({ llmConfigured, visionEnabled, seed, onSeedConsumed, openJournalId, onJournalOpened, active = true }: { llmConfigured: boolean; visionEnabled: boolean; seed?: JournalSeed; onSeedConsumed?: () => void; openJournalId?: string; onJournalOpened?: () => void; active?: boolean }) {
   const [boot] = useState(() => {
     const drafts = readDrafts();
     const latest = Object.entries(drafts).sort((a, b) => b[1].changed_at.localeCompare(a[1].changed_at))[0];
@@ -131,6 +131,7 @@ export default function Journal({ llmConfigured, visionEnabled, seed, onSeedCons
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState('');
   const [operation, setOperation] = useState('');
+  const [openingJournal, setOpeningJournal] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [localSafe, setLocalSafe] = useState(true);
   const [conflict, setConflict] = useState(false);
@@ -153,7 +154,7 @@ export default function Journal({ llmConfigured, visionEnabled, seed, onSeedCons
   const operationRef = useRef(false);
   const reviewingRef = useRef(false);
   const acceptingRef = useRef(false);
-  const locked = !!operation;
+  const locked = !!operation || !!openingJournal;
   const dirty = !!drafts[editorKey];
   const activeEntries = useMemo(() => entries.filter(item => !item.archived), [entries]);
   const savedEntry = entries.find(item => item.id === entry.id);
@@ -222,6 +223,30 @@ export default function Journal({ llmConfigured, visionEnabled, seed, onSeedCons
     const local = draftsRef.current[item.id]?.entry;
     setEntry(local || item); setEditorKey(item.id); setTagsText((local || item).tags.join('，')); setConflict(!!local && local.revision !== item.revision); setView('write'); setArchived(item.archived); setMonth(item.date.slice(0, 7)); setDay('');
   }
+  useEffect(() => {
+    if (!active || !openJournalId || operationRef.current) return;
+    let cancelled = false;
+    operationRef.current = true; setOpeningJournal(openJournalId);
+    setNotice({ text: '正在读取报告关联的复盘，现有本地草稿继续保留。' });
+    void journalAPI.get(openJournalId).then(item => {
+      if (cancelled) return;
+      setEntries(previous => {
+        const existing = previous.find(entry => entry.id === item.id);
+        return existing && existing.revision > item.revision ? previous : [item, ...previous.filter(entry => entry.id !== item.id)];
+      });
+      const local = draftsRef.current[item.id]?.entry;
+      setEntry(local || item); setEditorKey(item.id); setTagsText((local || item).tags.join('，'));
+      setConflict(!!local && local.revision !== item.revision); setView('write'); setArchived(item.archived);
+      setMonth(item.date.slice(0, 7)); setDay(''); setSearch('');
+      setNotice({ text: local ? '已打开关联复盘，并保留该篇尚未保存的本地编辑。' : '已打开报告关联复盘，可以继续补充个人判断和执行记录。' });
+      void load(); onJournalOpened?.();
+    }).catch(error => {
+      if (!cancelled) { setNotice({ text: `关联复盘读取失败：${errorMessage(error)}`, error: true }); onJournalOpened?.(); }
+    }).finally(() => {
+      if (!cancelled) { operationRef.current = false; setOpeningJournal(''); }
+    });
+    return () => { cancelled = true; operationRef.current = false; setOpeningJournal(''); };
+  }, [active, openJournalId, operation, onJournalOpened, load]);
   function openDraft(key: string) {
     if (locked) return;
     const local = draftsRef.current[key]?.entry;

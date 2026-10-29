@@ -1,12 +1,16 @@
 # CornWatch · 玉米市场研究工作台
 
-面向中国玉米期货的 **Electron 桌面应用 + Go 后端**。当前版本 **v0.4** 已接入实际合约公开报价、企业延迟公开报价、山东晨间到车、进口玉米拍卖结果、官方玉米收购监测和关联现货周报、产区天气，并提供数据源配置、更新状态与授权桥接。保留信息归集、事件分析、日线盘面研究、风险手数计算、时间留出检验，以及支持截图与 AI 整理的每日复盘。深入需求分析、市场知识与缺口评估见 [期货交易研究方案](docs/trading-research.md)。完整路线和开源项目比较见 [架构方案](docs/architecture.md)、[资料与来源核验](docs/research.md)。原有 `codex-harness-analysis.html` 保留。
+面向中国玉米期货的 **Electron 桌面应用 + Go 后端**。当前版本 **v0.6** 已接入实际合约公开报价、企业延迟公开报价、山东晨间到车、进口玉米拍卖结果、官方玉米收购监测和关联现货周报、产区天气，并提供数据源配置、更新状态与授权桥接。保留信息归集、事件分析、日线盘面研究、风险手数计算、时间留出检验，以及支持截图与 AI 整理的每日复盘。深入需求分析、市场知识与缺口评估见 [期货交易研究方案](docs/trading-research.md)。完整路线和开源项目比较见 [架构方案](docs/architecture.md)、[资料与来源核验](docs/research.md)。原有 `codex-harness-analysis.html` 保留。
 
 **启动后默认自动采集七个公开来源，成功后市场总览展示真实来源的快照。** 无真实报价时，原有演示/导入区仍独立标记；公开快照不是有服务保证的交易所实时订阅。`c2701`仅为初始关注值，主力按实际量仓和两个有效收盘观察日确认，不写死月份。实盘交易未启用。
 
 来源可靠性、实际核验与授权要求见 [行情来源研究](docs/data-sources-v3-market.md)、[产业来源研究](docs/data-sources-v3-industry.md)，配置和TqSdk启动步骤见 [接入指南](docs/data-bridge.md)。
 
 新增来源及口径见 [企业报价与到车](docs/public-enterprise-sources.md)、[进口玉米数据](docs/import-corn-sources.md)。市场总览新增「当前盘面分析」：用真实实际合约的完成日线计算指标，结合量仓、同期价差与产业证据，可导出 JSON 或一键带入复盘。10月28日晚间的[完整盘面分析](docs/current-market-analysis-2026-10-28.md)包含实际输入和计算依据。
+
+新增行情图表：最新报价按 **500 毫秒、每分钟 120 次目标**采集，展示实际请求计数、耗时和源报价时刻；实际合约历史日线及分钟 K 线支持 MA、BOLL、缩放、拖动和日期筛选。网络耗时、源限制与失败退避可能降低实际请求频率，120 次请求不等于 120 个新成交。[行情图表使用说明](docs/market-chart.md)介绍历史覆盖、指标口径与缓存。
+
+「每日分析」可在界面配置报告专用大模型，默认北京时间08:30盘前、15:30盘后自动生成；逐条展示依据、数据时点和风险，并可自动保存复盘。无模型账号可先用明确标注的规则预览。[每日AI报告使用指南](docs/daily-reports.md)说明配置、时间窗和收费边界；[数据更新频率与来源限制](docs/data-source-frequency.md)区分行情采集、页面本地刷新和供应商额度。
 
 ## 启动桌面
 
@@ -32,12 +36,13 @@ npm run dev
 
 | 页面/模块 | 当前可用内容 |
 | --- | --- |
-| 市场总览 | c/cs/lh/m实际合约报价、采样曲线、自动主力候选/确认/历史、收购价与关联现货序列、延迟公开到车、进口库存拍卖、企业报价检索与横向表、5地区天气；显示来源、时效与失败状态 |
+| 市场总览 | c/cs/lh/m实际合约报价、500ms目标与实际请求统计、采样曲线、历史日K/分钟K、MA/BOLL、缩放拖动与日期筛选、自动主力候选/确认/历史、收购价与关联现货序列、延迟公开到车、进口库存拍卖、5地区天气 |
+| 每日分析 | 报告专用模型配置与测试、工作日盘前/盘后自动任务、AI/规则标记、逐条证据引用、时间与风险、历史JSON导出、幂等保存复盘与打开对应日记 |
 | 盘面研究 | 日线蜡烛图、量仓联动、MA5/20/60、ATR14、RSI14、MACD、前20日高低、同日期限结构、口径确认后基差参考、风险与保证金双约束手数、图表一键存入复盘 |
 | 复盘日记 | 日历/搜索、多篇草稿、计划/假设/执行/反思/经验、截图上传/拖入/粘贴/放大、归档恢复、版本冲突保护、Markdown/带原图JSON导出 |
 | 复盘智能体 | 本地规则或配置的LLM整理，显式勾选视觉输入，候选经验采纳与撤回、个人经验上下文、原始版本快照及输入指纹 |
 | 事件雷达 | 搜索/分类/来源筛选，手工录入，原文和首次可用时间，规则摘要与可选 LLM 分析，新增真实高关注事件的应用内提示 |
-| 数据接入 | 六个独立源配置卡，保存/测试/同步/启停/频率/令牌、失败退避与重启恢复；官方周报、公开报价、天气、授权JSON/TqSdk桥接；保留玉米日K CSV及RSS |
+| 数据接入 | 九个独立源配置卡，保存/测试/同步/启停/频率/令牌、失败退避与重启恢复；行情120次/分钟快捷配置；官方周报、公开报价、天气、授权JSON/TqSdk桥接；保留玉米日K CSV及RSS |
 | 主力研究 | 至少两份可比较合约；连续两个有数据交易日确认；远月成交量及持仓量均超过原合约 10% 才换月；排除交割月，仅向远月切换 |
 | 回测实验室 | 玉米单合约双均线趋势、下一根日 K 开盘执行、每边成本、保证金与回撤约束、锁板/无量拒绝、净值/交易账本/运行历史与导出，固定参数70/30时间留出及双倍成本压力 |
 | 本地核心 | bbolt 事务持久化、重启恢复、SSE 状态更新及轮询降级、接口鉴权、模型限并发/超时/证据校验 |
@@ -65,18 +70,18 @@ symbol,timestamp,trade_date,open,high,low,close,settlement,volume,open_interest,
 
 | 来源 | 当前覆盖与更新 | 账号及费用 |
 | --- | --- | --- |
-| 新浪公开期货快照 | c/cs/lh/m实际月份，60秒采样，展示源时间 | 无需账号；网页接口无SLA，不当作授权交易行情 |
+| 新浪公开期货快照 | c/cs/lh/m实际月份，500ms目标采集，展示实际次数与源时间 | 无需账号；未核实官方数值配额，网页接口无SLA，不当作授权交易行情 |
 | 辽宁粮储官方报表 | 全省14市玉米收购/进厂监测均价，12小时查新 | 无需账号；周报，不是工厂当天门口价 |
 | 农业农村部周报 | 全国500县玉米、豆粕、生猪等监测价格，12小时查新 | 无需账号；不同地区和口径不直接比较为套利价差 |
 | Open-Meteo | 哈尔滨、长春、沈阳、潍坊、郑州3日预报，1小时采集 | 非商业免费；商业用途需采购或自部署，付费端点待适配 |
-| TqSdk / 授权行情JSON | 已提供只读脚本及界面配置，建议10秒同步 | 快期账号与对应权益；专业/云端/历史权限可能付费，未代为购买 |
+| TqSdk / 授权行情JSON | 已提供只读脚本及界面配置，支持500ms轮询桥接 | 快期账号与对应权益；本地HTTP读取频率不等于SDK上游订阅配额，专业/云端/历史权限可能付费 |
 | 企业收购价 / 到车量JSON | 已支持供应商标准化出口、校验和入库；亦可手工记录 | 企业或资讯商授权；Mysteel/卓创等通常订阅或单独询价，尚无真实账户接入 |
 
 在「数据与设置」保存配置后测试、同步。测试不会入库；失效会保留旧快照和上次成功时间，同时显示失败原因、源数据时刻、下次任务和陈旧标记。采集频率不是来源发布频率，重复读取不会制造新观测。主力确认、桥接契约和调用限制见 [接入指南](docs/data-bridge.md)。
 
 天气是点位预报，`observed_at`为目标日期、`available_at`为实际采集时刻。数据署名：[Open-Meteo](https://open-meteo.com/)，[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)；免费接口的非商业限制见[服务条款](https://open-meteo.com/en/terms)。新增产业卡不会使用演示数据填补未接入的到车量。
 
-`CORNWATCH_AUTO_SYNC=false npm start` 可暂停六类来源的所有自动任务，手动同步仍可用；正常启动默认启用四个公开源。RSS继续使用 `CORNWATCH_FEED_URLS`（逗号分隔授权RSS/Atom URL）、`CORNWATCH_POLL_INTERVAL=5m`；这项独立旧任务不受数据源全局暂停开关控制。没有配置RSS时不请求订阅源。天气旧环境变量仅在首次无已保存配置时初始化开关。`.env`不会自动加载。
+`CORNWATCH_AUTO_SYNC=false npm start` 可暂停九个数据源的所有自动任务，手动同步仍可用；正常启动默认启用七个公开源。历史图表按需查询独立于快照调度。RSS继续使用 `CORNWATCH_FEED_URLS`（逗号分隔授权RSS/Atom URL）、`CORNWATCH_POLL_INTERVAL=5m`；这项独立旧任务不受数据源全局暂停开关控制。没有配置RSS时不请求订阅源。天气旧环境变量仅在首次无已保存配置时初始化开关。`.env`不会自动加载。
 
 ## 配置大模型
 
@@ -140,11 +145,16 @@ npm run build
 python3 scripts/smoke.py
 node scripts/electron-smoke.mjs
 node scripts/data-ui-smoke.mjs
+node scripts/chart-indicators-test.mjs
+# Local-only synthetic bridge: 61-second cadence, chart controls, failure/stop
+node scripts/chart-ui-smoke.mjs
+# Optional network UI acceptance: real public daily data + loopback mock model
+node scripts/reports-ui-smoke.mjs
 python3 -m unittest discover -s adapters -p 'test_*.py'
 npm run package
 ```
 
-`smoke.py` 使用临时数据库验证鉴权、导入事务、重复记录、事件分析、回测成本和重启持久化，结束后删除测试数据。`electron-smoke.mjs` 在 Linux 图形会话中启动实际 Electron，使用临时用户目录验证页面交互，并将截图写入 `artifacts/`；不关闭沙箱。打包命令默认生成当前平台的应用目录到 `release/`；本轮已用独立输出 `release/v0.4/linux-unpacked/cornwatch` 保留旧版。关闭旧窗口后可运行新版，或在仓库根目录执行 `npm start`。跨平台发布还需要在目标系统构建、安装验收与签名。真实公开数据探测另行运行 `python3 scripts/live-data-probe.py`，实际桌面探测用 `node scripts/data-ui-smoke.mjs --live-public`；两者会联网并使用临时数据目录。验证记录见 [docs/validation.md](docs/validation.md)。
+`smoke.py` 使用临时数据库验证鉴权、导入事务、重复记录、事件分析、回测成本和重启持久化，结束后删除测试数据。`electron-smoke.mjs` 在 Linux 图形会话中启动实际 Electron，使用临时用户目录验证页面交互，并将截图写入 `artifacts/`；不关闭沙箱。打包命令默认生成当前平台的应用目录到 `release/`；本轮已用独立输出 `release/v0.6/linux-unpacked/cornwatch` 保留旧版。关闭旧窗口后可运行新版，或在仓库根目录执行 `npm start`。跨平台发布还需要在目标系统构建、安装验收与签名。真实公开数据探测另行运行 `python3 scripts/live-data-probe.py`，实际桌面探测用 `node scripts/data-ui-smoke.mjs --live-public`；两者会联网并使用临时数据目录。验证记录见 [docs/validation.md](docs/validation.md)。
 
 ## 后端单独运行与云迁移
 

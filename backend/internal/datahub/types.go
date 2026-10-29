@@ -10,46 +10,49 @@ import (
 )
 
 type Config struct {
-	Revision        uint64 `json:"revision"`
-	Enabled         bool   `json:"enabled"`
-	IntervalSeconds int    `json:"interval_seconds"`
-	Endpoint        string `json:"endpoint"`
-	Token           string `json:"token,omitempty"`
+	CadenceVersion  int     `json:"cadence_version,omitempty"`
+	Revision        uint64  `json:"revision"`
+	Enabled         bool    `json:"enabled"`
+	IntervalSeconds float64 `json:"interval_seconds"`
+	Endpoint        string  `json:"endpoint"`
+	Token           string  `json:"token,omitempty"`
 }
 type ConfigView struct {
-	Revision        uint64 `json:"revision"`
-	Enabled         bool   `json:"enabled"`
-	IntervalSeconds int    `json:"interval_seconds"`
-	Endpoint        string `json:"endpoint"`
-	TokenConfigured bool   `json:"token_configured"`
+	Revision        uint64  `json:"revision"`
+	Enabled         bool    `json:"enabled"`
+	IntervalSeconds float64 `json:"interval_seconds"`
+	Endpoint        string  `json:"endpoint"`
+	TokenConfigured bool    `json:"token_configured"`
 }
 type ConfigRequest struct {
-	Revision        uint64 `json:"revision"`
-	Enabled         bool   `json:"enabled"`
-	IntervalSeconds int    `json:"interval_seconds"`
-	Endpoint        string `json:"endpoint"`
-	Token           string `json:"token,omitempty"`
-	ClearToken      bool   `json:"clear_token,omitempty"`
+	Revision        uint64  `json:"revision"`
+	Enabled         bool    `json:"enabled"`
+	IntervalSeconds float64 `json:"interval_seconds"`
+	Endpoint        string  `json:"endpoint"`
+	Token           string  `json:"token,omitempty"`
+	ClearToken      bool    `json:"clear_token,omitempty"`
 }
 type Definition struct {
-	ID                   string `json:"id"`
-	Name                 string `json:"name"`
-	Kind                 string `json:"kind"`
-	Description          string `json:"description"`
-	OfficialURL          string `json:"official_url"`
-	AccountRequired      bool   `json:"account_required"`
-	CostNote             string `json:"cost_note"`
-	LicenseNote          string `json:"license_note"`
-	ConfigurableEndpoint bool   `json:"configurable_endpoint"`
-	MinIntervalSeconds   int    `json:"min_interval_seconds"`
-	MaxIntervalSeconds   int    `json:"max_interval_seconds"`
-	DefaultInterval      int    `json:"-"`
+	ID                   string  `json:"id"`
+	Name                 string  `json:"name"`
+	Kind                 string  `json:"kind"`
+	Description          string  `json:"description"`
+	OfficialURL          string  `json:"official_url"`
+	AccountRequired      bool    `json:"account_required"`
+	CostNote             string  `json:"cost_note"`
+	LicenseNote          string  `json:"license_note"`
+	RequestPolicy        string  `json:"request_policy"`
+	ConfigurableEndpoint bool    `json:"configurable_endpoint"`
+	MinIntervalSeconds   float64 `json:"min_interval_seconds"`
+	MaxIntervalSeconds   float64 `json:"max_interval_seconds"`
+	DefaultInterval      float64 `json:"-"`
 }
 type PricePoint struct {
 	ObservedAt time.Time `json:"observed_at"`
 	Last       float64   `json:"last"`
 }
 type Record struct {
+	PersistedAt         *time.Time              `json:"persisted_at,omitempty"`
 	NoPublication       string                  `json:"no_publication,omitempty"`
 	ConfigRevision      uint64                  `json:"config_revision,omitempty"` // Configuration used to compute NextRun.
 	PriceHistory        map[string][]PricePoint `json:"price_history,omitempty"`
@@ -67,7 +70,19 @@ type Record struct {
 	Main                market.State            `json:"main"`
 	Binding             string                  `json:"binding"`
 }
+type Polling struct {
+	TargetIntervalMS        float64    `json:"target_interval_ms"`
+	TargetRequestsPerMinute float64    `json:"target_requests_per_minute"`
+	RequestsLastMinute      int        `json:"requests_last_minute"`
+	LastLatencyMS           float64    `json:"last_latency_ms"`
+	LastRequestAt           *time.Time `json:"last_request_at,omitempty"`
+	StatsSince              *time.Time `json:"stats_since,omitempty"`
+	PersistedAt             *time.Time `json:"persisted_at,omitempty"`
+	PersistenceNote         string     `json:"persistence_note"`
+}
+
 type Source struct {
+	Polling Polling `json:"polling"`
 	Definition
 	Config              ConfigView `json:"config"`
 	Status              string     `json:"status"`
@@ -98,6 +113,9 @@ type Batch struct {
 type Fetcher func(context.Context, Config) (Batch, error)
 type Outcome struct {
 	OK           bool       `json:"ok"`
+	Skipped      bool       `json:"skipped,omitempty"`
+	Cached       bool       `json:"cached,omitempty"`
+	FetchedAt    *time.Time `json:"fetched_at,omitempty"`
 	Message      string     `json:"message"`
 	RecordCount  int        `json:"record_count"`
 	Added        int        `json:"added"`
@@ -106,6 +124,7 @@ type Outcome struct {
 	Coverage     []string   `json:"coverage"`
 }
 type Live struct {
+	Polling       Polling                 `json:"polling"`
 	PriceHistory  map[string][]PricePoint `json:"price_history"`
 	Status        string                  `json:"status"`
 	LastError     string                  `json:"last_error"`

@@ -1,4 +1,4 @@
-// v0.4 UI integration: actual sandboxed Electron + temporary profile + local
+// v0.6 UI integration: actual sandboxed Electron + temporary profile + local
 // HTTP fixtures. Every quote and industry observation below is SYNTHETIC.
 // Default mode uses no production profile, provider account, external source, or live order.
 // Build first: npm run build. Run: node scripts/data-ui-smoke.mjs [packaged-binary]
@@ -14,13 +14,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { seedOfflineChartHistory } from './chart-test-fixtures.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const livePublic = process.argv.includes('--live-public');
 const packagedBinary = process.argv.slice(2).find(argument => !argument.startsWith('--'));
 const profile = await mkdtemp(path.join(tmpdir(), 'cornwatch-data-ui-'));
 const userData = path.join(profile, 'cornwatch');
-const artifacts = path.join(root, 'artifacts', 'v4-ui');
+const artifacts = path.join(root, 'artifacts', 'v6-data-ui');
 const fixtureToken = randomBytes(24).toString('hex');
 const clean = value => String(value).split(fixtureToken).join('[isolated test credential]');
 const checks = [];
@@ -34,6 +35,7 @@ const symbol = `c${contractYear}01`;
 const syntheticEntity = '隔离验收·合成玉米收购监测';
 const syntheticTruckEntity = '隔离验收·合成企业到车';
 const initialPrice = 2367;
+if (!livePublic) await seedOfflineChartHistory(root, userData, ['c2701', symbol]);
 
 function fixtureQuotes() {
   return [
@@ -327,7 +329,7 @@ async function captureLivePublic(catalog) {
   const passed = outcomes.every(item => item.ok) && analysis.ok;
   await writeFile(path.join(artifacts, 'live-report.json'), JSON.stringify({ passed, mode: 'live-public', fixtures: 'none; actual account-free public responses only; disposable database', sources: outcomes, public_evidence: publicEvidence, current_analysis: analysis, real_quote_symbols: live.quotes.map(item => item.symbol), real_industry_sources: [...new Set(observations.filter(item => item.kind !== 'weather').map(item => item.source))], weather_regions: weatherRegions, viewport_widths: [1080, 1400], created_at: new Date().toISOString() }, null, 2));
   await rm(path.join(artifacts, 'live-unexpected-failure.png'), { force: true });
-  console.log(`LIVE ${passed ? 'PASS' : 'PARTIAL'}: ${outcomes.filter(item => item.ok).length}/${publicIds.length} actual public sources; current analysis ${analysis.ok ? 'PASS' : 'UNAVAILABLE'}. No mock or provider credentials; evidence: artifacts/v4-ui/live-*.png and live-report.json`);
+  console.log(`LIVE ${passed ? 'PASS' : 'PARTIAL'}: ${outcomes.filter(item => item.ok).length}/${publicIds.length} actual public sources; current analysis ${analysis.ok ? 'PASS' : 'UNAVAILABLE'}. No mock or provider credentials; evidence: artifacts/v6-data-ui/live-*.png and live-report.json`);
   if (!passed) process.exitCode = 2;
 }
 
@@ -399,10 +401,11 @@ try {
   checks.push('disabled source can test and sync manually; tests do not write data');
 
   // A second real UI sync creates exactly one new sample, not a demo history.
+  await delay(5100); // Respect the shared upstream burst cache before changing a fixture.
   quoteVersion = 1;
   await syncCard(marketCard);
   await navigate('市场总览');
-  await until(`document.querySelector('.market-monitor')?.textContent.includes('真实报价采样') && document.querySelector('.market-monitor')?.textContent.includes(${JSON.stringify((initialPrice + 2).toLocaleString('zh-CN'))})`);
+  await until(`document.querySelector('.market-monitor')?.textContent.includes('实时价格与历史行情') && document.querySelector('.market-monitor')?.textContent.includes(${JSON.stringify((initialPrice + 2).toLocaleString('zh-CN'))})`);
   const live = await api('/api/market/live');
   assert(live.price_history[symbol].length === 2, 'Live chart history mixed in synthetic demo bars or duplicate samples');
   assert(await evaluate(`document.querySelector('.market-monitor')?.textContent.includes(${JSON.stringify(market.name)})`), 'Overview did not name the actual bridge source');
@@ -443,6 +446,7 @@ try {
 
   // Provider failure must leave both prices and their original timestamp intact.
   const beforeFailure = await api('/api/market/live');
+  await delay(5100); // Failure must exercise a new fetch, not the valid cache.
   marketFailure = true;
   await clickIn(marketCard, '立即同步');
   await until(`document.querySelector(${JSON.stringify(`${marketCard} .ds-action-notice.error`)})?.textContent.includes('503')`);
@@ -482,7 +486,7 @@ try {
 
   await writeFile(path.join(artifacts, 'report.json'), JSON.stringify({ passed: true, fixtures: 'synthetic, loopback-only, disposable database', checks, fixture_requests: fixtureCounts, viewport_widths: [1080, 1400], created_at: new Date().toISOString() }, null, 2));
   await rm(path.join(artifacts, 'failure-unexpected-synthetic.png'), { force: true });
-  console.log(`PASS: ${checks.length} v0.4 Electron integration checks. Synthetic fixtures only; screenshots and report: artifacts/v4-ui/`);
+  console.log(`PASS: ${checks.length} v0.6 Electron integration checks. Synthetic fixtures only; screenshots and report: artifacts/v6-data-ui/`);
   }
 } catch (error) {
   try { await screenshot(livePublic ? 'live-unexpected-failure.png' : 'failure-unexpected-synthetic.png'); } catch {}

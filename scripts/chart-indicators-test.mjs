@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { movingAverage, bollingerBands, parsePeriods } from '../desktop/src/chart-indicators.ts';
+const rows = [1,2,3,4,5].map(close => ({ close }));
+assert.deepEqual(movingAverage(rows, 3), [null, null, 2, 3, 4]);
+const bands = bollingerBands(rows, 3, 2);
+assert.equal(bands[0], null);
+assert.equal(bands[2].mid, 2);
+assert.ok(Math.abs(bands[2].upper - (2 + 2 * Math.sqrt(2/3))) < 1e-12);
+assert.deepEqual(bollingerBands([{close:7},{close:7}], 2, 2)[1], {mid:7,upper:7,lower:7});
+assert.deepEqual(movingAverage(rows.slice(0,3),3), movingAverage(rows,3).slice(0,3));
+assert.equal(movingAverage([{close:1},{close:NaN}],2)[1],null);
+assert.throws(()=>movingAverage(rows,0));
+assert.throws(()=>bollingerBands(rows,3,NaN));
+assert.deepEqual(parsePeriods('5，10 20,60'),[5,10,20,60]);
+assert.equal(parsePeriods('1,251'),null);
+console.log('MA/BOLL: warm-up, population sigma, zero variance, causality, invalid inputs and parsing passed.');

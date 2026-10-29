@@ -25,6 +25,7 @@ import (
 	"cornwatch/internal/datahub"
 	"cornwatch/internal/domain"
 	"cornwatch/internal/journal"
+	"cornwatch/internal/marketchart"
 	"cornwatch/internal/marketdaily"
 	"cornwatch/internal/quant"
 	"cornwatch/internal/store"
@@ -39,20 +40,34 @@ type Config struct {
 	Hub                      *datahub.Hub
 }
 type Server struct {
-	DailyFetcher DailyFetcher
-	current      chan struct{}
-	Store        *store.Store
-	Analyzer     *analysis.Analyzer
-	Collector    *collector.Collector
-	Config       Config
-	mu           sync.Mutex
-	subs         map[chan string]struct{}
-	collecting   map[string]bool
-	backtests    chan struct{}
+	reportMu        sync.Mutex
+	reportJournalMu sync.Mutex
+	reportBusy      bool
+	reportClosing   bool
+	reportContext   context.Context
+	reportCancel    context.CancelFunc
+	reportWorkers   sync.WaitGroup
+	reportInitErr   error
+	DailyFetcher    DailyFetcher
+	Chart           *marketchart.Service
+	current         chan struct{}
+	Store           *store.Store
+	Analyzer        *analysis.Analyzer
+	Collector       *collector.Collector
+	Config          Config
+	mu              sync.Mutex
+	subs            map[chan string]struct{}
+	collecting      map[string]bool
+	backtests       chan struct{}
 }
 
 func New(s *store.Store, a *analysis.Analyzer, c Config) *Server {
-	server := &Server{DailyFetcher: marketdaily.New().Fetch, current: make(chan struct{}, 1), Store: s, Analyzer: a, Collector: collector.New(), Config: c, subs: map[chan string]struct{}{}, collecting: map[string]bool{}, backtests: make(chan struct{}, 2)}
+	server := &Server{DailyFetcher: marketdaily.Cached(marketdaily.New().Fetch), current: make(chan struct{}, 1), Store: s, Analyzer: a, Collector: collector.New(), Config: c, subs: map[chan string]struct{}{}, collecting: map[string]bool{}, backtests: make(chan struct{}, 2)}
+	server.Chart = marketchart.New(s, func(ctx context.Context, symbol string, at time.Time) (marketdaily.Report, error) {
+		return server.DailyFetcher(ctx, symbol, at)
+	})
+	server.reportContext, server.reportCancel = context.WithCancel(context.Background())
+	server.reportInitErr = server.recoverReportJobs()
 	if c.Hub != nil {
 		c.Hub.SetNotify(server.changed)
 	}
@@ -65,9 +80,17 @@ func (s *Server) Handler() http.Handler {
 		s.Config.Hub.Register(mux)
 	}
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		write(w, 200, map[string]any{"status": "ok", "version": "0.4.0", "mode": "research", "live_trading": false})
+		write(w, 200, map[string]any{"status": "ok", "version": "0.6.0", "mode": "research", "live_trading": false})
 	})
+	mux.HandleFunc("GET /api/report-settings", s.getReportSettings)
+	mux.HandleFunc("POST /api/report-settings", s.saveReportSettings)
+	mux.HandleFunc("POST /api/report-settings/test", s.testReportSettings)
+	mux.HandleFunc("GET /api/daily-reports", s.dailyReportList)
+	mux.HandleFunc("GET /api/daily-reports/{id}", s.dailyReportDetail)
+	mux.HandleFunc("POST /api/daily-reports/generate", s.generateDailyReport)
+	mux.HandleFunc("POST /api/daily-reports/{id}/journal", s.dailyReportJournal)
 	mux.HandleFunc("GET /api/research/market", s.marketResearch)
+	mux.HandleFunc("GET /api/market/history", s.marketHistory)
 	mux.HandleFunc("GET /api/research/current", s.getCurrentAnalysis)
 	mux.HandleFunc("POST /api/research/current", s.refreshCurrentAnalysis)
 	mux.HandleFunc("POST /api/research/risk", s.riskResearch)
@@ -678,9 +701,16 @@ func (s *Server) collect(ctx context.Context, kind string) (int, error) {
 	return count, err
 }
 func (s *Server) Poll(ctx context.Context) {
+	// Wait for schedulers to cancel their workers and flush pending quote
+	// checkpoints before main closes the shared databases.
+	var schedulers sync.WaitGroup
+	schedulers.Add(1)
+	go func() { defer schedulers.Done(); s.pollReports(ctx) }()
 	if s.Config.Hub != nil {
-		go s.Config.Hub.Poll(ctx)
+		schedulers.Add(1)
+		go func() { defer schedulers.Done(); s.Config.Hub.Poll(ctx) }()
 	}
+	defer schedulers.Wait()
 	interval := s.Config.PollInterval
 	if interval < time.Minute {
 		interval = 5 * time.Minute

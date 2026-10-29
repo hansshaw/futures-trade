@@ -79,7 +79,8 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	httpServer := &http.Server{Handler: app.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16 * 1024, BaseContext: func(net.Listener) context.Context { return ctx }}
-	go app.Poll(ctx)
+	pollDone := make(chan struct{})
+	go func() { defer close(pollDone); app.Poll(ctx) }()
 	go func() {
 		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			log.Printf("server: %v", err)
@@ -93,4 +94,6 @@ func main() {
 	if err := httpServer.Shutdown(shutdown); err != nil {
 		_ = httpServer.Close()
 	}
+	app.WaitReports()
+	<-pollDone
 }

@@ -8,12 +8,14 @@ import DataSources from './DataSources';
 import MarketMonitor from './MarketMonitor';
 import IndustryBoard from './IndustryBoard';
 import CurrentAnalysis from './CurrentAnalysis';
+import DailyReports from './DailyReports';
 import Journal from './Journal';
 import ValidationPanel from './ValidationPanel';
 import type { ResearchSeed } from './research-api';
+import type { LiveMarket } from './market-api';
 
-type Page = 'overview' | 'events' | 'backtest' | 'settings' | 'research' | 'journal';
-const navItems = [{ id: 'overview' as Page, label: '市场总览', icon: Gauge }, { id: 'research' as Page, label: '盘面研究', icon: ChartCandlestick }, { id: 'journal' as Page, label: '复盘日记', icon: NotebookPen }, { id: 'events' as Page, label: '事件雷达', icon: Radar }, { id: 'backtest' as Page, label: '回测实验室', icon: FlaskConical }, { id: 'settings' as Page, label: '数据与设置', icon: Database }];
+type Page = 'overview' | 'events' | 'backtest' | 'settings' | 'research' | 'journal' | 'reports';
+const navItems = [{ id: 'overview' as Page, label: '市场总览', icon: Gauge }, { id: 'research' as Page, label: '盘面研究', icon: ChartCandlestick }, { id: 'reports' as Page, label: '每日分析', icon: Sparkles }, { id: 'journal' as Page, label: '复盘日记', icon: NotebookPen }, { id: 'events' as Page, label: '事件雷达', icon: Radar }, { id: 'backtest' as Page, label: '回测实验室', icon: FlaskConical }, { id: 'settings' as Page, label: '数据与设置', icon: Database }];
 const categories: Record<string, string> = { weather: '天气影响', purchase_price: '收购价格', truck_arrivals: '物流到车', related_price: '关联品种', policy: '政策动态', supply: '供需变化', import_auction: '进口玉米拍卖', other: '其他信息' };
 const kindNames: Record<string, string> = { import_auction_rate: '进口玉米拍卖成交率',  purchase_price: '收购价格', truck_arrivals: '到车数量', weather: '天气记录', related_price: '关联价格' };
 const directionNames = { bullish: '偏多', bearish: '偏空', mixed: '影响分化', unknown: '待研判' };
@@ -24,9 +26,15 @@ export default function App() {
   const [page, setPage] = useState<Page>('overview');
   const [journalSeed,setJournalSeed] = useState<ResearchSeed|undefined>();
   const consumeSeed=useCallback(()=>setJournalSeed(undefined),[]);
+  const [openJournalId, setOpenJournalId] = useState<string | undefined>();
+  const consumeJournalOpen = useCallback(() => setOpenJournalId(undefined), []);
+  const openSavedJournal = useCallback((id: string) => { setJournalSeed(undefined); setOpenJournalId(id); setPage('journal'); }, []);
+  const openJournalSeed = useCallback((seed: ResearchSeed) => { setOpenJournalId(undefined); setJournalSeed(seed); setPage('journal'); }, []);
   useEffect(()=>{ window.scrollTo({top:0}); },[page]);
-  const pageMeta = { overview:['MARKET OVERVIEW','把握玉米市场的每一次变化','价格、产区、物流与关联产业，一站式研究视野。'], research:['MARKET STRUCTURE','用证据理解盘面，让假设可以检验','量价持仓、波动、跨月结构与风险预算，连接研究和每日复盘。'], journal:['TRADING JOURNAL','记录判断，也记录判断如何改变','以文字和截图保留每天的研究与执行，让经验有据可查。'], events:['EVENT RADAR','从市场信息，追踪影响路径','保留原始证据与可用时间，将信息整理成可复核的事件。'], backtest:['BACKTEST LAB','让交易假设，接受历史检验','单合约双均线基线 · 次日开盘执行 · 样本外检验与成本压力。'], settings:['DATA WORKSPACE','可靠研究，从可追溯的数据开始','管理数据接入、导入行情、记录基本面观察，并配置分析模型。'] }[page];
+  const pageMeta = { overview:['MARKET OVERVIEW','把握玉米市场的每一次变化','价格、产区、物流与关联产业，一站式研究视野。'], research:['MARKET STRUCTURE','用证据理解盘面，让假设可以检验','量价持仓、波动、跨月结构与风险预算，连接研究和每日复盘。'], reports:['DAILY ANALYSIS','让每天的研究，形成可追溯的判断','盘前与盘后定时分析，连接真实依据、大模型与个人复盘。'], journal:['TRADING JOURNAL','记录判断，也记录判断如何改变','以文字和截图保留每天的研究与执行，让经验有据可查。'], events:['EVENT RADAR','从市场信息，追踪影响路径','保留原始证据与可用时间，将信息整理成可复核的事件。'], backtest:['BACKTEST LAB','让交易假设，接受历史检验','单合约双均线基线 · 次日开盘执行 · 样本外检验与成本压力。'], settings:['DATA WORKSPACE','可靠研究，从可追溯的数据开始','管理数据接入、导入行情、记录基本面观察，并配置分析模型。'] }[page];
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [marketSnapshot,setMarketSnapshot]=useState<LiveMarket|null>(null);
+  const marketSequence=useRef(0), marketInFlight=useRef(false);
   const [events, setEvents] = useState<MarketEvent[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -55,8 +63,9 @@ export default function App() {
 
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setRefreshing(true);
+    const liveRequest=marketSequence.current;
     const response = await Promise.allSettled([api<Dashboard>('/api/dashboard'), api<MarketEvent[]>('/api/events'), api<Observation[]>('/api/observations'), api<Settings>('/api/settings'), api<Backtest[]>('/api/backtests')]);
-    if (response[0].status === 'fulfilled') { setDashboard(response[0].value); setConnectionError(''); }
+    if (response[0].status === 'fulfilled') { setDashboard(response[0].value); if(liveRequest===marketSequence.current&&response[0].value.market_live)setMarketSnapshot(response[0].value.market_live); setConnectionError(''); }
     else setConnectionError(response[0].reason instanceof Error ? response[0].reason.message : '连接后端失败');
     if (response[1].status === 'fulfilled') {
       const items = response[1].value ?? [];
@@ -71,6 +80,14 @@ export default function App() {
     setLoading(false); setRefreshing(false);
   }, []);
 
+  const refreshMarket = useCallback(async () => {
+    if(marketInFlight.current)return;
+    marketInFlight.current=true;const sequence=++marketSequence.current;
+    try{const current=await api<LiveMarket>('/api/market/live');if(sequence===marketSequence.current)setMarketSnapshot(current)}
+    catch{/* General connection status is checked separately; retain last snapshot. */}
+    finally{marketInFlight.current=false}
+  },[]);
+
   const refreshBars = useCallback(async () => {
     const requestId = ++barRequest.current;
     try { const response = await api<Bar[]>(`/api/bars?symbol=${encodeURIComponent(chartSymbol)}&demo=${chartDemo}`); if (requestId === barRequest.current) { setBars(response ?? []); setBarsError(''); } }
@@ -80,13 +97,17 @@ export default function App() {
   useEffect(() => { void refresh(); const id = setInterval(() => void refresh(true), 15000); return () => clearInterval(id); }, [refresh]);
   useEffect(() => { void refreshBars(); const id = setInterval(() => void refreshBars(), 15000); return () => clearInterval(id); }, [refreshBars]);
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const update = () => { clearTimeout(timer); timer = setTimeout(() => { void refresh(true); void refreshBars(); }, 120); };
-    if (window.cornwatch?.onUpdate) { const unsubscribe = window.cornwatch.onUpdate(update); return () => { clearTimeout(timer); unsubscribe(); }; }
+    let timer: ReturnType<typeof setTimeout>|undefined, marketTimer: ReturnType<typeof setTimeout>|undefined;
+    const update = (event: {kind:string}) => {
+      if(event.kind==='market') { if(!marketTimer)marketTimer=setTimeout(()=>{marketTimer=undefined;void refreshMarket()},120);return; }
+      if(!timer)timer=setTimeout(()=>{timer=undefined;void refresh(true);void refreshBars()},120);
+    };
+    const fallback=setInterval(()=>void refreshMarket(),2000);
+    if (window.cornwatch?.onUpdate) { const unsubscribe = window.cornwatch.onUpdate(update); return () => { clearTimeout(timer);clearTimeout(marketTimer);clearInterval(fallback);unsubscribe(); }; }
     const stream = new EventSource('/api/stream');
-    stream.addEventListener('update', update);
-    return () => { clearTimeout(timer); stream.close(); };
-  }, [refresh, refreshBars]);
+    stream.addEventListener('update', event=>{try{update(JSON.parse((event as MessageEvent).data))}catch{/* Keep periodic local fallback. */}});
+    return () => {clearTimeout(timer);clearTimeout(marketTimer);clearInterval(fallback);stream.close();};
+  }, [refresh, refreshBars, refreshMarket]);
   useEffect(() => { if (toast) { const id = setTimeout(() => setToast(null), 7000); return () => clearTimeout(id); } }, [toast]);
   useEffect(() => { const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { setModal(null); setSelectedEvent(null); } }; document.addEventListener('keydown', onKey); return () => document.removeEventListener('keydown', onKey); }, []);
 
@@ -98,14 +119,20 @@ export default function App() {
   }
   const notify = (message: string) => setToast({ message, error: false });
   const visibleEvents = useMemo(() => events.filter(event => (category === 'all' || event.category === category) && (eventOrigin === 'all' || event.is_demo === (eventOrigin === 'demo')) && `${event.title} ${event.body} ${event.region} ${event.source}`.toLowerCase().includes(search.toLowerCase())), [events, category, eventOrigin, search]);
-  const main = dashboard?.main_contract;
+  const live = marketSnapshot || dashboard?.market_live;
+  const hasLive = !!live?.quotes.length;
+  const main = hasLive ? live.main.decision : dashboard?.main_contract;
   const highEvents = events.filter(event => event.severity === 'high').length;
-  const quotes = dashboard?.quotes ?? [];
+  const quotes = hasLive ? ['c','cs','lh','m'].flatMap(product=>{
+    const preferred=live.main.decision.symbol||live.main.provisional_symbol;
+    const q=live.quotes.filter(quote=>quote.product===product).sort((a,b)=>product==='c'&&(a.symbol===preferred||b.symbol===preferred)?a.symbol===preferred?-1:1:b.trade_date.localeCompare(a.trade_date)||b.volume-a.volume||b.open_interest-a.open_interest)[0];
+    if(!q)return[];
+    const stale=!!live.latest_data_at&&Date.parse(live.latest_data_at)-Date.parse(q.observed_at)>300000;
+    return[{...q,previous_close:0,is_demo:false,freshness:stale?'stale':live.freshness,freshness_note:stale?'该合约报价落后于本批次其他合约':live.freshness_note}];
+  }):dashboard?.quotes??[];
   const mainQuote = quotes.find(quote => quote.symbol === main?.symbol) ?? quotes[0];
   const recentObservations = observations.slice(0, 6);
-  const live = dashboard?.market_live;
-  const hasLive = !!live?.quotes.length;
-  const modeName = dashboard?.mode === 'public_quotes' ? '公开参考报价' : dashboard?.mode === 'authorized_quotes' ? '授权桥接报价' : dashboard?.mode === 'imported' ? '导入数据' : dashboard?.mode === 'empty' ? '等待数据' : '演示环境';
+  const modeName = hasLive ? live.source_id==='market_bridge'?'授权桥接报价':'公开参考报价' : dashboard?.mode === 'public_quotes' ? '公开参考报价' : dashboard?.mode === 'authorized_quotes' ? '授权桥接报价' : dashboard?.mode === 'imported' ? '导入数据' : dashboard?.mode === 'empty' ? '等待数据' : '演示环境';
 
   async function analyze(event: MarketEvent, useLLM: boolean) {
     await execute(`analyze-${event.id}`, async () => {
@@ -122,7 +149,7 @@ export default function App() {
   }
 
   return <div className="app-shell">
-    <aside className="sidebar"><div className="brand"><div className="brand-icon"><Wheat size={26} strokeWidth={1.65} /></div><div><strong>CornWatch<span>研 究 工 作 台</span></strong></div></div><div className="workspace-label">WORKSPACE <span>01</span></div><nav>{navItems.map(item => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon size={19} /><span>{item.label}</span>{item.id === 'events' && highEvents > 0 && <b>{highEvents}</b>}</button>)}</nav><div className="sidebar-bottom"><div className="research-badge"><ShieldCheck size={18} /><div>研究模式<span>实盘交易未启用</span></div></div><div className="sidebar-status"><i className={connectionError ? 'status-dot error' : 'status-dot'} />{connectionError ? '后端连接异常' : '本地研究引擎'}<span>v0.4</span></div></div></aside>
+    <aside className="sidebar"><div className="brand"><div className="brand-icon"><Wheat size={26} strokeWidth={1.65} /></div><div><strong>CornWatch<span>研 究 工 作 台</span></strong></div></div><div className="workspace-label">WORKSPACE <span>01</span></div><nav>{navItems.map(item => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)} aria-current={page === item.id ? 'page' : undefined}><item.icon size={19} /><span>{item.label}</span>{item.id === 'events' && highEvents > 0 && <b>{highEvents}</b>}</button>)}</nav><div className="sidebar-bottom"><div className="research-badge"><ShieldCheck size={18} /><div>研究模式<span>实盘交易未启用</span></div></div><div className="sidebar-status"><i className={connectionError ? 'status-dot error' : 'status-dot'} />{connectionError ? '后端连接异常' : '本地研究引擎'}<span>v0.6</span></div></div></aside>
     <div className="workspace"><header className="topbar"><div className="breadcrumb">期货研究 <ChevronRight size={13} /><strong>{navItems.find(item => item.id === page)?.label}</strong></div><div className="topbar-right"><span className={`environment ${hasLive || dashboard?.mode === 'imported' ? 'imported' : ''}`}><span />{modeName}</span><span className="clock-label">北京时间</span><button className="icon-button" title="刷新数据" aria-label="刷新数据" onClick={() => { void refresh(); void refreshBars(); }} disabled={refreshing}><RefreshCw size={17} className={refreshing ? 'spin' : ''} /></button></div></header>
     <main>
       {connectionError && <div className="alert error-alert"><Activity size={18} /><div><strong>暂时无法连接研究引擎</strong><span>{connectionError}。请确认 Go 后端已启动，或重新启动桌面应用。</span></div><button className="text-button" onClick={() => void refresh()}>重试</button></div>}
@@ -130,15 +157,16 @@ export default function App() {
       <div className="research-notice"><ShieldCheck size={16} /><span><strong>研究与验证环境</strong> · 公开报价、授权桥接、导入日线分别标记；请核对来源与数据时刻。实盘交易未启用。</span><span className="notice-code">NO LIVE TRADING</span></div>
 
       {loading && !dashboard ? <div className="loading-state"><LoaderCircle className="spin" size={30} /><p>正在载入研究工作台…</p></div> : <>
-      {page === 'research' && <Research observations={observations} onJournal={seed=>{setJournalSeed(seed);setPage('journal')}}/>}
-      <div hidden={page !== 'journal'}><Journal active={page === 'journal'} llmConfigured={!!settings?.llm.configured} visionEnabled={!!settings?.journal?.vision_enabled} seed={journalSeed} onSeedConsumed={consumeSeed}/></div>
+      {page === 'research' && <Research observations={observations} onJournal={openJournalSeed}/>}
+      <div hidden={page !== 'journal'}><Journal active={page === 'journal'} llmConfigured={!!settings?.llm.configured} visionEnabled={!!settings?.journal?.vision_enabled} seed={journalSeed} onSeedConsumed={consumeSeed} openJournalId={openJournalId} onJournalOpened={consumeJournalOpen}/></div>
+      <div hidden={page !== 'reports'}><DailyReports active={page === 'reports'} onOpenJournal={openSavedJournal} onDataSources={() => setPage('settings')} /></div>
       <div hidden={page !== 'settings'}><DataSources active={page === 'settings'} onChanged={()=>void refresh(true)}/></div>
       {page === 'overview' && <>
         <section className="quote-grid">{quotes.length ? quotes.filter(quote => hasLive || !/^c\d/.test(quote.symbol) || quote.symbol === (main?.symbol || mainQuote?.symbol)).map((quote, index) => <article className={`quote-card ${index === 0 ? 'featured' : ''}`} key={quote.symbol}><div className="quote-head"><span>{quote.name || quote.symbol}</span>{hasLive?<span className="badge real">{live?.source_id === 'market_bridge'?'授权桥接':'公开参考'}</span>:<Badge demo={quote.is_demo} />}</div><div className="quote-symbol">{quote.symbol.toUpperCase()}<span>{quote.symbol === main?.symbol ? '当前判定主力' : quote.product === 'c' ? '当前候选' : '关联观察'}</span></div><div className="quote-value">{number(quote.last, 0)}<span className={quote.change_pct >= 0 ? 'price-up' : 'price-down'}>{quote.change_pct >= 0 ? <ArrowUpRight size={17} /> : <ArrowDownRight size={17} />}{quote.change_pct > 0 ? '+' : ''}{number(quote.change_pct, 2)}%</span></div><div className="quote-footer"><span>持仓 {number(quote.open_interest / 10000, 1)} 万手{hasLive?' · 涨跌较前结算':''}</span><time>{time(quote.observed_at)}</time></div>{hasLive&&<p className={`quote-feed ${quote.freshness === 'stale' ? 'quote-stale' : ''}`} title={quote.freshness_note}>{quote.freshness === 'stale' ? '该合约报价陈旧' : quote.freshness === 'market_closed' ? '休市保留快照' : quote.freshness === 'fresh' ? '源时刻在参考范围内' : '请核验数据时效'} · {quote.source}</p>}</article>) : <div className="panel span-all"><Empty title="暂无行情快照" detail="导入合约日线后可生成研究快照。" /></div>}</section>
-        {live&&<MarketMonitor live={live} onSettings={()=>setPage('settings')} onChanged={()=>void refresh(true)}/>}
+        {live&&<MarketMonitor live={live} onSettings={()=>setPage('settings')} onChanged={()=>void refreshMarket()}/>}
         {!hasLive && <div className="overview-grid"><section className="panel chart-panel"><div className="panel-header"><div><span className="section-kicker">PRICE ACTION</span><h2>玉米价格走势 <span className="subtle-tag">收盘价</span></h2></div><div className="chart-controls"><input aria-label="图表合约代码" value={chartSymbol} onChange={event => setChartSymbol(event.target.value.toLowerCase())} placeholder="c2701" maxLength={12} /><select aria-label="图表数据来源" value={String(chartDemo)} onChange={event => setChartDemo(event.target.value === 'true')}><option value="true">演示日线</option><option value="false">导入日线</option></select></div></div><div className="chart-overline"><strong>{bars.length ? number(bars[bars.length - 1].close) : '—'}</strong><span>元 / 吨</span><span className="chart-range">{bars.length} 根日线 · {chartSymbol.toUpperCase()} <Badge demo={chartDemo} /></span></div>{barsError ? <Empty title="行情读取失败" detail={barsError} /> : <LineChart points={bars.map(bar => ({ label: bar.trade_date || bar.timestamp.slice(0, 10), value: bar.close }))} />}<div className="panel-footer"><span><i className="tiny-dot" /> 单合约日线 · 未拼接连续合约</span><span>{bars.length ? `${bars[0].trade_date} — ${bars[bars.length - 1].trade_date}` : '暂无数据'}</span></div></section>
-        <section className="panel main-contract"><div className="panel-header"><div><span className="section-kicker">CONTRACT WATCH</span><h2>主力合约追踪</h2></div><Sprout size={22} className="accent" /></div><div className="contract-code">{main?.symbol?.toUpperCase() || '待确认'}{main && <Badge demo={main.is_demo} />}</div><p className="contract-description">{main?.reason || '等待足够的合约持仓量与成交量数据。'}</p><div className="contract-detail"><span>候选切换合约</span><strong>{main?.pending_symbol?.toUpperCase() || '暂无候选'}</strong></div><div className="contract-detail"><span>候选连续确认</span><strong>{main?.confirmation_days ?? 0}<small> / {main?.required_days ?? 3} 个交易日</small></strong></div><div className="progress-track"><i style={{ width: `${Math.min(100, (main?.confirmation_days ?? 0) / (main?.required_days || 3) * 100)}%` }} /></div><div className="contract-detail"><span>前一主力</span><strong>{main?.previous_symbol?.toUpperCase() || '—'}</strong></div><div className="contract-note"><ShieldCheck size={15} /><span>按可用历史数据判定，满足连续确认才切换；没有跨合约数据时不推断真实主力。</span></div></section></div>}
-        <CurrentAnalysis active={page === 'overview'} live={live} onJournal={seed=>{setJournalSeed(seed);setPage('journal')}}/>
+        <section className="panel main-contract"><div className="panel-header"><div><span className="section-kicker">CONTRACT WATCH</span><h2>主力合约追踪</h2></div><Sprout size={22} className="accent" /></div><div className="contract-code">{main?.symbol?.toUpperCase() || '待确认'}{main && <Badge demo={'is_demo' in main ? !!main.is_demo : false} />}</div><p className="contract-description">{main?.reason || '等待足够的合约持仓量与成交量数据。'}</p><div className="contract-detail"><span>候选切换合约</span><strong>{main?.pending_symbol?.toUpperCase() || '暂无候选'}</strong></div><div className="contract-detail"><span>候选连续确认</span><strong>{main?.confirmation_days ?? 0}<small> / {main?.required_days ?? 3} 个交易日</small></strong></div><div className="progress-track"><i style={{ width: `${Math.min(100, (main?.confirmation_days ?? 0) / (main?.required_days || 3) * 100)}%` }} /></div><div className="contract-detail"><span>前一主力</span><strong>{main?.previous_symbol?.toUpperCase() || '—'}</strong></div><div className="contract-note"><ShieldCheck size={15} /><span>按可用历史数据判定，满足连续确认才切换；没有跨合约数据时不推断真实主力。</span></div></section></div>}
+        <CurrentAnalysis active={page === 'overview'} live={live} onJournal={openJournalSeed} onDailyReports={() => setPage('reports')}/>
         <IndustryBoard observations={observations} onAdd={()=>setModal('observation')} onSettings={()=>setPage('settings')}/>
         <div className="bottom-grid"><section className="panel"><div className="panel-header"><div><span className="section-kicker">SIGNALS & STORIES</span><h2>市场事件雷达 <span className="count-badge">{events.length}</span></h2></div><button className="text-button" onClick={() => setPage('events')}>查看全部 <ArrowRight size={14} /></button></div><div className="event-list">{events.length ? events.slice(0, 4).map(event => eventCard(event, true)) : <Empty title="暂无市场事件" detail="手工录入信息，或配置授权的 RSS / Atom 来源。" />}</div></section><section className="panel"><div className="panel-header"><div><span className="section-kicker">FUNDAMENTALS</span><h2>产区与产业观察</h2></div><button className="icon-button" title="添加观察记录" onClick={() => setModal('observation')}><Plus size={18} /></button></div><div className="observation-list">{recentObservations.length ? recentObservations.map(item => <div className="observation" key={item.id}><div className={`observation-icon ${item.kind === 'weather' ? 'blue' : ''}`}>{item.kind === 'weather' ? <CloudRain size={17} /> : item.kind === 'truck_arrivals' ? <Activity size={17} /> : <Leaf size={17} />}</div><div className="observation-copy"><strong>{item.entity}</strong><span>{item.region} · {kindNames[item.kind] ?? item.kind} <Badge demo={item.is_demo} /></span></div><div className="observation-value"><strong>{number(item.value, item.kind === 'purchase_price' ? 1 : 0)}<small>{item.unit}</small></strong><span>{time(item.observed_at)}</span></div></div>) : <Empty title="暂无基本面观察" detail="记录收购报价、到车数量、天气或关联产品价格。" />}</div><div className="panel-footer">观察值为特定地区、时间与口径的记录，不代表全国现货水平。</div></section></div>
       </>}
@@ -156,7 +184,7 @@ export default function App() {
         <section className="panel observation-table"><div className="panel-header"><h2>基本面观察记录</h2><span className="muted">保留来源与可用时间</span></div><div className="table-scroll"><table><thead><tr><th>类型 / 主体</th><th>区域</th><th>数值</th><th>观察时间</th><th>系统可用时间</th><th>来源</th><th>口径说明</th><th>标记</th></tr></thead><tbody>{observations.slice(0, 100).map(item => <tr key={item.id}><td><strong>{item.entity}</strong><small>{kindNames[item.kind] ?? item.kind}</small></td><td>{item.region}</td><td>{number(item.value, 2)} {item.unit}</td><td>{time(item.observed_at)}</td><td>{time(item.available_at)}</td><td>{item.source}</td><td className="reason-cell">{item.note || '—'}</td><td><Badge demo={item.is_demo} /></td></tr>)}</tbody></table>{!observations.length && <Empty title="暂无观察记录" />}</div></section>
       </>}
       </>}
-      <footer className="workspace-footer"><span><i className={connectionError ? 'status-dot error' : 'status-dot'} />{connectionError ? '连接异常' : '研究引擎已连接'} · 变更即时推送 · 界面15秒刷新</span><span>界面快照 {time(dashboard?.as_of, true)}{mainQuote?.source ? ` · ${mainQuote.source}` : ''}</span></footer>
+      <footer className="workspace-footer"><span><i className={connectionError ? 'status-dot error' : 'status-dot'} />{connectionError ? '连接异常' : '研究引擎已连接'} · 行情独立推送 · 其他信息15秒刷新</span><span>界面快照 {time(dashboard?.as_of, true)}{mainQuote?.source ? ` · ${mainQuote.source}` : ''}</span></footer>
     </main></div>
 
     {selectedEvent && <Modal title="事件详情与影响分析" onClose={() => setSelectedEvent(null)}><div className="event-detail"><div className="event-meta"><span>{categories[selectedEvent.category] ?? selectedEvent.category}</span><Badge demo={selectedEvent.is_demo} /><span>{selectedEvent.region}</span></div><h2>{selectedEvent.title}</h2><p className="event-body">{selectedEvent.body}</p><dl className="event-facts"><div><dt>来源</dt><dd>{selectedEvent.source}</dd></div><div><dt>原始发布时间</dt><dd>{time(selectedEvent.published_at, true)}</dd></div><div><dt>系统可用时间</dt><dd>{time(selectedEvent.available_at, true)}</dd></div><div><dt>关联产品</dt><dd>{(selectedEvent.products ?? []).join('、') || '未指定'}</dd></div>{selectedEvent.source_url && <div className="source-url"><dt>原始链接</dt><dd>{selectedEvent.source_url}</dd></div>}</dl><div className="analysis-toolbar"><button className="secondary-button" disabled={!!action} onClick={() => void analyze(selectedEvent, false)}><Settings2 size={15} /><Busy busy={action === `analyze-${selectedEvent.id}`}>规则分析</Busy></button><button className="primary-button" disabled={!!action || !dashboard?.llm_configured} title={!dashboard?.llm_configured ? '请先在后端配置大模型接口' : '将本事件发送至配置的模型服务'} onClick={() => void analyze(selectedEvent, true)}><Sparkles size={15} />大模型分析</button></div><p className="small-note">规则分析无需模型。大模型分析会发送此事件内容；置信度是模型自评，不代表收益概率。</p>{selectedEvent.analysis ? <div className="analysis-result"><div className="analysis-heading"><span className={`direction ${selectedEvent.analysis.direction}`}>{directionNames[selectedEvent.analysis.direction]}</span><span>置信度 {number(selectedEvent.analysis.confidence * 100)}% · {selectedEvent.analysis.model}</span></div><h3>{selectedEvent.analysis.summary}</h3><h4>影响路径</h4><ul>{(selectedEvent.analysis.reasoning ?? []).map((item, index) => <li key={index}>{item}</li>)}</ul>{selectedEvent.analysis.evidence?.length > 0 && <><h4>支持证据</h4><ul>{selectedEvent.analysis.evidence.map((item, index) => <li key={index}>{item}</li>)}</ul></>}{selectedEvent.analysis.risk_flags?.length > 0 && <div className="analysis-risks"><strong>需核实的风险</strong>{selectedEvent.analysis.risk_flags.map((item, index) => <p key={index}>{item}</p>)}</div>}<span className="small-note">分析时间 {time(selectedEvent.analysis.analyzed_at, true)}</span></div> : <div className="analysis-placeholder"><Sparkles size={22} /><span>尚未分析 · 从证据出发评估供需影响</span></div>}</div></Modal>}

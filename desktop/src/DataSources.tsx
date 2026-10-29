@@ -3,6 +3,7 @@ import { Activity, AlertCircle, ArrowDownToLine, CalendarClock, Check, ChevronDo
 import { api } from './api';
 import { Busy, Empty, number } from './components';
 import './DataSources.css';
+import type { PollingStatus } from './market-api';
 
 type SourceId = 'boyar_prices' | 'boyar_arrivals' | 'import_auction' | 'sina' | 'liaoning' | 'moa' | 'weather' | 'market_bridge' | 'industry_bridge';
 type SourceStatus = 'disabled' | 'unconfigured' | 'idle' | 'running' | 'ok' | 'error';
@@ -15,6 +16,7 @@ interface SourceConfig {
   token_configured: boolean;
 }
 interface DataSource {
+  polling?: PollingStatus;
   id: SourceId;
   name: string;
   kind: string;
@@ -23,6 +25,7 @@ interface DataSource {
   account_required: boolean;
   cost_note: string;
   license_note: string;
+  request_policy: string;
   configurable_endpoint: boolean;
   min_interval_seconds: number;
   max_interval_seconds: number;
@@ -100,7 +103,7 @@ function safeOfficialUrl(value: string): string | null {
   catch { return null; }
 }
 
-function SourceGuide({ id }: { id: SourceId }) {
+function SourceGuide({ id, requestPolicy }: { id: SourceId; requestPolicy?: string }) {
   const bridge = id === 'market_bridge' || id === 'industry_bridge';
   return <details className="ds-guide">
     <summary><Info size={13} />{bridge ? '如何接入授权数据' : '查看数据口径与更新说明'}<ChevronDown size={13} /></summary>
@@ -115,7 +118,8 @@ function SourceGuide({ id }: { id: SourceId }) {
       {bridge && <p className="ds-guide-foot">上游 SDK 密码留在桥接脚本的配置中；这里的令牌只用于访问你的桥接服务。不要把供应商网页地址直接作为 JSON 接口。</p>}
       {id === 'market_bridge' && <p className="ds-guide-foot">仓库适配脚本：<code>adapters/tqsdk_bridge.py</code>，默认端点 <code>http://127.0.0.1:8787/quotes</code>。授权账号通过脚本侧环境变量配置。</p>}
       {bridge && <p className="ds-guide-foot">请求格式、启动与授权说明见仓库文档 <code>docs/data-bridge.md</code>。</p>}
-      {!bridge && <p className="ds-guide-foot">同步间隔决定本程序多久请求一次；发布方可能按周更新，重复同步不会产生更高频的真实数据。</p>}
+      {requestPolicy && <p className="ds-guide-foot">请求频率与授权：{requestPolicy}</p>}
+      <p className="ds-guide-foot">同步间隔是本程序的请求安排，最低间隔不是供应商许可额度。发布方可能按周更新，重复同步不会产生更高频的真实数据；页面刷新只读取本地缓存。</p>
     </div>
   </details>;
 }
@@ -186,7 +190,7 @@ function SourceCard({ source, current, paused, onUpdate, onRefresh, onChanged, o
   }
   function validateDraft(): string | null {
     const interval = seconds(draft);
-    if (!draft.interval.trim() || !Number.isSafeInteger(interval) || interval < source.min_interval_seconds || interval > source.max_interval_seconds) return `同步间隔须为整数秒，范围 ${intervalLabel(source.min_interval_seconds)}至 ${intervalLabel(source.max_interval_seconds)}。`;
+    if (!draft.interval.trim() || !Number.isFinite(interval) || !Number.isSafeInteger(Math.round(interval * 1000)) || Math.abs(interval * 1000 - Math.round(interval * 1000)) > 1e-6 || interval < source.min_interval_seconds || interval > source.max_interval_seconds) return `同步间隔最细支持毫秒，范围 ${intervalLabel(source.min_interval_seconds)}至 ${intervalLabel(source.max_interval_seconds)}。`;
     if (source.configurable_endpoint) {
       if (draft.enabled && !draft.endpoint.trim()) return '请先填写桥接端点，或关闭自动采集后保存。';
       if (draft.endpoint.trim()) {
@@ -204,7 +208,7 @@ function SourceCard({ source, current, paused, onUpdate, onRefresh, onChanged, o
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (operationRef.current || source.status === 'running') return;
+    if (operationRef.current) return;
     const validation = validateDraft();
     if (validation) { setNotice({ kind: 'error', message: validation, at: new Date().toISOString() }); return; }
     operationRef.current = true; setOperation('save'); setNotice(null);
@@ -262,26 +266,28 @@ function SourceCard({ source, current, paused, onUpdate, onRefresh, onChanged, o
         <div><dt>{source.id === 'weather' ? '预报采集时刻 · 非目标日期' : '来源数据时刻'}</dt><dd>{source.latest_data_at ? formatTime(source.latest_data_at) : '来源尚未提供'}</dd></div>
         <div><dt>下次自动同步</dt><dd>{!source.config.enabled ? '已停用' : paused ? '全局自动同步已暂停' : source.status === 'unconfigured' ? '等待配置' : source.next_run ? formatTime(source.next_run) : '等待调度'}</dd></div>
       </dl>
+      {source.kind === 'market' && source.polling && <div className="ds-polling"><span>目标 <b>{number(source.polling.target_requests_per_minute,0)} 次/分</b> · {number(source.polling.target_interval_ms,0)} ms</span><span>过去60秒实际 <b>{source.polling.requests_last_minute} 次</b></span><span>最近耗时 {number(source.polling.last_latency_ms,0)} ms</span><small>{source.polling.persistence_note || '失败退避或慢响应会降低实际请求数；不重复并发追赶。'}</small></div>}
       <div className="ds-record-counts"><span>上次有效记录 <b>{number(source.total_records)}</b></span><span>新增 / 更新 <b>{number(source.added)}</b></span><span>重复跳过 <b>{number(source.duplicates)}</b></span>{source.consecutive_failures > 0 && <span className="ds-fail-count">连续失败 <b>{source.consecutive_failures}</b></span>}</div>
 
       {source.last_error && <details className="ds-last-error"><summary><AlertCircle size={13} /><span>{redact(source.last_error)}</span><ChevronDown size={13} /></summary><p>{redact(source.last_error)}</p><small>失败不会清除先前成功的数据；请同时查看数据时刻和新鲜度。</small></details>}
 
       <div className="ds-access-note"><KeyRound size={13} /><div><strong>{source.account_required ? '需要自备账号或数据授权' : '当前接入不要求账号'}</strong><p>{source.cost_note || '费用与使用条件请向来源方核实。'}</p>{source.license_note && <small>{source.license_note}</small>}</div>{officialUrl && <a href={officialUrl} target="_blank" rel="noreferrer noopener" aria-label={`${source.name}来源说明`} title="查看来源说明"><ExternalLink size={14} /></a>}</div>
-      <SourceGuide id={source.id} />
+      <SourceGuide id={source.id} requestPolicy={source.request_policy} />
 
       {expanded && <form className="ds-config-form" onSubmit={event => void save(event)}>
         <div className="ds-config-heading"><h4>采集配置</h4><span>保存版本 v{baseConfig.revision}</span></div>
         {(conflict || changedElsewhere) && <div className="ds-conflict" role="alert"><strong>配置已被其他操作更新</strong><p>本页草稿基于 v{baseConfig.revision}，服务器为 v{source.config.revision}。当前编辑仍保留，请比较后选择如何继续。</p><p>服务器当前：自动采集{source.config.enabled ? '开启' : '关闭'}，每 {intervalLabel(source.config.interval_seconds)}{source.configurable_endpoint ? `；端点 ${endpointLabel(source.config.endpoint)}` : ''}。</p><div><button className="text-button" type="button" disabled={busy} onClick={retainDraft}>保留本页编辑，基于最新版本继续</button><button className="text-button" type="button" disabled={busy} onClick={restoreConfig}>撤销本页修改，使用服务器配置</button></div></div>}
-        <fieldset disabled={busy}>
+        <fieldset disabled={!!operation}>
           <label className="ds-toggle-label"><input type="checkbox" checked={draft.enabled} onChange={event => updateDraft({ enabled: event.target.checked })} /><span><strong>启用自动采集</strong><small>保存后按设定频率采集；关闭后仍可手动测试与同步{paused ? '。当前全局自动同步暂停' : ''}。</small></span></label>
           <label className="ds-interval-label">采集间隔<div><input type="number" required step="any" min={source.min_interval_seconds / draft.unit} max={source.max_interval_seconds / draft.unit} value={draft.interval} onChange={event => updateDraft({ interval: event.target.value })} aria-label={`${source.name}采集间隔`} /><select value={draft.unit} onChange={event => changeUnit(Number(event.target.value) as IntervalUnit)} aria-label={`${source.name}采集间隔单位`}><option value={1}>秒</option><option value={60}>分钟</option><option value={3600}>小时</option></select></div><small>范围 {intervalLabel(source.min_interval_seconds)}至 {intervalLabel(source.max_interval_seconds)}；请求频率不等于发布频率。</small></label>
+          {source.kind === 'market' && source.min_interval_seconds <= .5 && <div className="ds-frequency-preset"><button type="button" className="secondary-button" onClick={() => updateDraft({ interval: '0.5', unit: 1 })}>设为 120 次 / 分钟（500 ms）</button><small>保存配置后生效。采集目标不是上游更新承诺；请求被拒时会自动退避。</small></div>}
           {source.configurable_endpoint && <>
             <label>桥接端点<input type="url" maxLength={2000} autoComplete="off" spellCheck={false} value={draft.endpoint} required={draft.enabled} onChange={event => updateDraft({ endpoint: event.target.value })} placeholder={source.id === 'market_bridge' ? 'http://127.0.0.1:8787/quotes' : 'http://127.0.0.1:8766/industry'} /><small>示例地址需替换为正在运行的桥接服务；凭据请放入下方令牌栏。</small></label>
             <label>访问令牌 <span className="ds-token-state">{source.config.token_configured ? '已设置 · 不回显' : '尚未设置'}</span><input type="password" maxLength={4096} autoComplete="new-password" spellCheck={false} disabled={draft.clearToken} value={draft.token} onChange={event => updateDraft({ token: event.target.value })} placeholder={source.config.token_configured ? '同服务留空保留；新令牌可替换' : '可选，用于访问你自己的桥接服务'} /><small>仅随保存请求提交，不写入浏览器本地存储。更换协议、主机或端口时需重新填写，避免向新服务发送旧令牌。</small></label>
             {source.config.token_configured && <label className="ds-clear-token"><input type="checkbox" checked={draft.clearToken} onChange={event => updateDraft({ clearToken: event.target.checked, token: '' })} /><span>保存时删除现有令牌</span></label>}
           </>}
         </fieldset>
-        <div className="ds-save-actions"><span>{dirty ? '有未保存修改 · 测试与同步使用已保存配置' : '配置与服务器保存版本一致'}</span><button className="text-button" type="button" disabled={busy || !dirty} onClick={restoreConfig}>撤销修改</button><button className="primary-button" type="submit" disabled={busy || !dirty || conflict || changedElsewhere}><Busy busy={operation === 'save'}><Save size={13} />保存配置</Busy></button></div>
+        <div className="ds-save-actions"><span>{dirty ? '有未保存修改 · 测试与同步使用已保存配置' : '配置与服务器保存版本一致'}</span><button className="text-button" type="button" disabled={!!operation || !dirty} onClick={restoreConfig}>撤销修改</button><button className="primary-button" type="submit" disabled={!!operation || !dirty || conflict || changedElsewhere}><Busy busy={operation === 'save'}><Save size={13} />保存配置</Busy></button></div>
       </form>}
 
       {notice && <ActionNotice notice={notice} onClose={() => setNotice(null)} />}
@@ -329,7 +335,7 @@ export default function DataSources({ onChanged, active = true }: { onChanged?: 
     void refresh(true);
     const interval = setInterval(() => void refresh(), 15000);
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const onUpdate = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => void refresh(), 250); };
+    const onUpdate = (update: {kind:string}) => { if (timer) return; timer = setTimeout(() => { timer = undefined; void refresh(); }, update.kind === 'market' ? 1000 : 250); };
     const unsubscribe = window.cornwatch?.onUpdate(onUpdate);
     return () => { clearInterval(interval); if (timer) clearTimeout(timer); unsubscribe?.(); };
   }, [refresh, active]);

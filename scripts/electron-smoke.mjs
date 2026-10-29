@@ -7,10 +7,12 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { seedOfflineChartHistory } from './chart-test-fixtures.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const profile = await mkdtemp(path.join(tmpdir(), 'cornwatch-electron-'));
 const userData = path.join(profile, 'cornwatch');
+await seedOfflineChartHistory(root, userData, ['c2701']);
 const listener = net.createServer();
 await new Promise(resolve => listener.listen(0, '127.0.0.1', resolve));
 const port = listener.address().port;

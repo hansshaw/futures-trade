@@ -27,6 +27,11 @@ type bridgePayload struct {
 }
 
 func fetchBridge(ctx context.Context, client *http.Client, c Config, isMarket bool, now time.Time) (Batch, error) {
+	started := time.Now()
+	return fetchBridgeWithClock(ctx, client, c, isMarket, func() time.Time { return now.Add(time.Since(started)) })
+}
+
+func fetchBridgeWithClock(ctx context.Context, client *http.Client, c Config, isMarket bool, clock func() time.Time) (Batch, error) {
 	if err := validateEndpoint(c.Endpoint); err != nil {
 		return Batch{}, err
 	}
@@ -51,6 +56,10 @@ func fetchBridge(ctx context.Context, client *http.Client, c Config, isMarket bo
 	if err != nil || len(body) > 4*1024*1024 {
 		return Batch{}, errors.New("桥接响应读取失败或超过4MiB")
 	}
+	// Acquisition occurs after the response body arrives, not when its request
+	// began. A quote produced during network transit must not appear to have
+	// been received before its own observed_at when received_at was omitted.
+	now := clock()
 	var payload bridgePayload
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.DisallowUnknownFields()
